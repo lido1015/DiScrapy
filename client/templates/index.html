@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>DiScrapy</title>
+        <style>
+            body {
+                font-family: 'Arial', sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f0f4f8;
+                color: #333;
+            }
+            h1 {
+                text-align: center;
+                color: #007bff;
+                margin-bottom: 20px;
+            }
+            .container {
+                max-width: 600px;
+                margin: auto;
+                background: white;
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            }
+            .input-container {
+                display: flex; 
+                margin-bottom: 30px; 
+            }
+            input[type="text"] {
+                flex-grow: 1;
+                padding: 12px;
+                border: 2px solid #007bff;
+                border-radius: 5px 0 0 5px; 
+                font-size: 16px;
+            }
+            button {
+                padding: 12px; 
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 0 5px 5px 0; 
+                cursor: pointer;
+                font-size: 16px; 
+                transition: background-color 0.3s ease;
+                margin-left: -1px; 
+            }
+            button:hover {
+                background-color: #0056b3;
+            }
+            pre {
+                background-color: #e9ecef;
+                padding: 15px;
+                border-radius: 5px;
+                overflow-x: auto;
+                max-height: 300px; 
+                overflow-y: auto; 
+                display: none; 
+            }
+            .spinner {
+                display: none; 
+                margin: auto;
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                border-top: 4px solid #007bff; 
+                border-right: 4px solid transparent; 
+                animation: spin 1s linear infinite; 
+            }
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Welcome to DiScrapy!</h1>
+            <div class="input-container">
+                <input type="text" id="url" placeholder="Introduce the URL">
+                <button onclick="scrape()">Scrape</button>                
+            </div>            
+            <div class="spinner" id="spinner"></div>             
+            <pre id="output"></pre>            
+            <button id="downloadBtn" style="display:none; width: calc(100%); border-radius: 5px;" onclick="downloadHTML()">Download</button> 
+        </div>
+
+        <script>
+
+            function scrape() {
+                const url = document.getElementById("url").value;
+
+                // Limpiar contenido previo        
+                document.getElementById('output').style.display = 'none'; // Ocultar el label de resultado
+                
+                document.getElementById('downloadBtn').style.display = 'none'; // Ocultar botón de descarga
+
+                // Mostrar el spinner
+                document.getElementById('spinner').style.display = 'block';
+
+                fetch("/send_url", { 
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: url }), 
+                })
+                .then((response) => response.json())
+                .then((data) => {
+                    if (data.status === "success") {
+                        document.getElementById("output").textContent = data.data;
+                    } else {
+                        document.getElementById("output").textContent = data.message;
+                    }
+                })
+                .catch((error) => {
+                    document.getElementById("output").textContent = "Error: " + error.message;
+                })
+                .finally(() => {                    
+                    document.getElementById('spinner').style.display = 'none';               
+                    document.getElementById('downloadBtn').style.display = 'block';                    
+                    document.getElementById('output').style.display = 'block'; 
+                });
+            }
+
+
+
+
+            document.addEventListener('DOMContentLoaded', () => {
+                const input = document.querySelector('input'); // Asegúrate de seleccionar correctamente tu input
+                input.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        scrape();
+                    }
+                });
+            });
+
+
+
+            
+
+
+
+
+            function downloadHTML() {
+                let sHTML =  document.getElementById("output").textContent
+                const blob = new Blob([sHTML], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'index.html'; // Nombre del archivo a descargar
+                document.body.appendChild(a);
+                a.click();
+                
+                // Limpiar y eliminar el enlace temporal
+                setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);  
+                }, 100);
+            }
+        </script>
+
+    </body>
+</html>
+
+
