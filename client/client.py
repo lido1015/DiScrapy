@@ -1,10 +1,9 @@
 from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-
 import uvicorn
-import requests
 
+import requests
 import sys
 import argparse
 
@@ -12,7 +11,6 @@ import argparse
 class Client():
     def __init__(self, ip, port, entry_addr) -> None:        
         self.entry_addr = entry_addr
-
         self.app = FastAPI()
         self.templates = Jinja2Templates(directory="templates") 
         self.configure_endpoints()
