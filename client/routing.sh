@@ -6,6 +6,6 @@ Third=$(hostname -i | cut -d . -f3)
 Router=$First"."$Second"."$Third".254"
 
 ip route del default
-ip route add default via $Router
+ip /etc/route add default via $Router
 
-python client.py $@
+cat /etc/resolv.conf && python client.py $@

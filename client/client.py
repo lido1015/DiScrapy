@@ -3,9 +3,12 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import uvicorn
 
-import requests
+
+import os
+import zipfile
 import sys
 import argparse
+import requests
 
 
 class Client():
@@ -23,14 +26,31 @@ class Client():
         
         @self.app.post("/send_url")
         def send_url(url: dict):
-            print("Enviando al servidor " + str(url))        
-            request_url = f"http://{self.entry_addr}/scrap"
+            print("Enviando al servidor " + str(url))   
+            url = url["url"]    
+            request_url = f"http://{self.entry_addr}/scrape/?url={url}"
             try:
-                response = requests.post(request_url, json=url)
-                response.raise_for_status()
-                return response.json()
-            except Exception:
-                return None   
+                response = requests.post(request_url)
+                if response.status_code == 200:
+                    file_name = response.headers.get('FILENAME')
+                    output_path = f"Requests/{file_name}"
+                    with open(output_path, 'wb') as file:
+                        file.write(response.content)  
+
+                    with zipfile.ZipFile(output_path, 'r') as archivo_zip:                        
+                        archivo_zip.extractall(output_path[:-4])                    
+                    os.remove(output_path)
+
+                    with open(f"{output_path[:-4]}/index.html", 'r', encoding='utf-8') as archivo:
+                        html = archivo.read()
+                        
+                    return {"status": "success", "data" : html}               
+
+                else:
+                    print(f"Error downloading: {response.status_code}")
+
+            except Exception as e:
+                print(e)
        
         
     def run(self, ip, port):        

@@ -1,32 +1,55 @@
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 import uvicorn
 
-from bs4 import BeautifulSoup
-import requests
-
+import os
 import sys
 import argparse
+
+from scraper import scrape, zip_name
 
 
 class ScraperServer():
     def __init__(self, ip, port) -> None:
+        self.storage = read_storage()
         self.app = FastAPI()        
-        self.configure_endpoints()
+        self.configure_endpoints()        
         self.run(ip,port)
+
+
         
     def configure_endpoints(self):  
         
-        @self.app.post("/scrap")        
-        def scrape(url: dict):
-            print("Scrapeando " + str(url))
-            url = url["url"]
-            response = requests.get(url)    
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, "html.parser")    
-            return {"status": "success", "data": str(soup)}
-        
+        @self.app.post("/scrape")        
+        def scrape_request(url: str):
+            print("Scrapeando " + url)            
+            try:    
+                if url not in self.storage:
+                    scrape(url)
+                    self.storage.append(url)
+                    update_storage(url) 
+                zip_file = zip_name(url)
+                path = os.path.join('storage/', zip_file)
+                response = FileResponse(path=path,filename=zip_file,media_type='application/zip')        
+                response.headers['FILENAME'] = zip_file
+                return response
+            except Exception as e:                    
+                return {"error": str(e)}  
+
+      
     def run(self, host, port):        
         uvicorn.run(self.app, host=host, port=port)
+
+
+def read_storage() -> list[str]:
+    list = []
+    with open('storage/index.txt', 'r') as archivo:
+        list = archivo.read().splitlines()
+    return list
+
+def update_storage(url: str) -> None:
+    with open('storage/index.txt', 'a') as archivo:        
+        archivo.write(url + '\n')     
 
 
 

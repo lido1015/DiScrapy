@@ -5,7 +5,7 @@ Second=$(hostname -i | cut -d . -f2)
 Third=$(hostname -i | cut -d . -f3)
 Router=$First"."$Second"."$Third".254"
 
-ip route del default
-ip route add default via $Router
+# ip route del default
+# ip route add default via $Router
 
 python server.py $@

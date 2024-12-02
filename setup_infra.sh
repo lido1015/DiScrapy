@@ -6,8 +6,7 @@ docker network inspect clients >/dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo "Network clients exists."
 else
-    docker network create --driver bridge --opt com.docker.network.bridge.enable_ip_masquerade=true clients --subnet 10.0.10.0/24
-    #docker network create clients --subnet 10.0.10.0/24
+    docker network create clients --subnet 10.0.10.0/24
     echo "Network clients created."
 fi
 
@@ -17,8 +16,7 @@ docker network inspect servers >/dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo "Network servers exists."
 else
-    docker network create --driver bridge --opt com.docker.network.bridge.enable_ip_masquerade=true servers --subnet 10.0.11.0/24
-    #docker network create servers --subnet 10.0.11.0/24
+    docker network create servers --subnet 10.0.11.0/24
     echo "Network servers created."
 fi
 
@@ -41,7 +39,7 @@ if [ $? -eq 0 ]; then
     echo "Container router removed."    
 fi
 
-docker run -d --rm --name router router
+docker run -d --rm --cap-add NET_ADMIN --name router router
 echo "Container router executed."
 
 # attach router to client and server networks
