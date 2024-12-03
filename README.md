@@ -28,24 +28,35 @@ web correspondiente. Cada uno de estos archivos es almacenado localmente para re
 
 El único requerimiento para la ejecución del proyecto es tener docker instalado en la pc.
 
+
+1. Clonar el repositorio
+
 ```bash
-# Clonar el repositorio
 git clone https://github.com/lido1015/DiScrapy
+```
 
-# Ir al directorio del proyecto
+2. Ir al directorio del proyecto
+```bash
 cd DiScrapy
+```
 
-# Construir las imágenes de docker y ejecutar los contenedores necesarios 
+3. Construir las imágenes de docker y ejecutar los contenedores necesarios 
+```bash
 chmod +x setup_infra.sh && ./setup_infra.sh
+```
 
-# Ejecutar la aplicación servidor
+4. Ejecutar la aplicación servidor
+```bash
 docker run -it --rm -p 10000:10000 --name server -e PYTHONUNBUFFERED=1 --cap-add NET_ADMIN --network servers -v $(pwd):/server/app server --ip "0.0.0.0"
+```
 
-# Ejecutar la aplicación cliente
-# Modificar el parámetro --port para ejecutar varios clientes.
-# La interfaz de usuario estará disponible en el navegador local en la dirección "http://0.0.0.0:{port}/"
+5. Ejecutar la aplicación cliente.              
+
+   Modificar los parámetros --name y --port para ejecutar varios clientes.    
+   
+   La interfaz de usuario estará disponible en el navegador local en la dirección "http://0.0.0.0:{port}/"
+```bash
 docker run -it --rm -p 11000:11000 --name client1 -e PYTHONUNBUFFERED=1 --cap-add NET_ADMIN --network  clients -v $(pwd):/client/app client --ip "0.0.0.0" --port 11000 --entry_addr "10.0.11.2:10000"
-
 ```
 
 
