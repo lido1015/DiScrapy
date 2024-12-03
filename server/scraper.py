@@ -29,12 +29,12 @@ def scrape(url: str) -> None:
         compress(folder)
 
     else:
-        print(f"Error accessing {url}: {response.status_code}")    
+        raise Exception(f"Error accessing {url}: {response.status_code}")    
 
 
 def create_folder(url: str) -> str:
 
-    folder_name = url.split("//")[-1].replace("/", "_")
+    folder_name = name_from_url(url)
     
     folder_path = os.path.join('storage', folder_name)
 
@@ -53,7 +53,6 @@ def download_files(url, soup, folder):
         if css_url:
             download(css_url, folder)
 
-    # Descargar archivos JS
     for script in soup.find_all("script"):
         if script.attrs.get("src"):
             js_url = urljoin(url, script.attrs.get("src"))
@@ -62,9 +61,7 @@ def download_files(url, soup, folder):
 
 
 def download(url, folder):
-    try:
-        #reponse = requests.head(url)
-        
+    try:        
         response_file = requests.get(url)
         name_file = os.path.join(folder, os.path.basename(url))
         with open(name_file, 'wb') as f:
@@ -88,9 +85,16 @@ def compress(folder):
     shutil.rmtree(folder)  
 
 
+def name_from_url(url):
+    if url[-1] == '/':
+        url = url[:-1]
+    return url.split("//")[-1].replace("/", "_")
+
 def zip_name(url):
-    zip_name = url.split("//")[-1].replace("/", "_")    
+    zip_name = name_from_url(url)   
     return f"{zip_name}.zip"
+
+
 
 
 

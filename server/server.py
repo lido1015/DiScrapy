@@ -15,8 +15,7 @@ class ScraperServer():
         self.app = FastAPI()        
         self.configure_endpoints()        
         self.run(ip,port)
-
-
+        
         
     def configure_endpoints(self):  
         

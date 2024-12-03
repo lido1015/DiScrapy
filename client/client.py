@@ -33,7 +33,7 @@ class Client():
                 response = requests.post(request_url)
                 if response.status_code == 200:
                     file_name = response.headers.get('FILENAME')
-                    output_path = f"Requests/{file_name}"
+                    output_path = f"REQUESTS/{file_name}"
                     with open(output_path, 'wb') as file:
                         file.write(response.content)  
 

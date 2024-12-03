@@ -112,13 +112,14 @@
                     } else {
                         document.getElementById("output").textContent = data.message;
                     }
+                    document.getElementById('downloadBtn').style.display = 'block';
                 })
                 .catch((error) => {
                     document.getElementById("output").textContent = "Error: " + error.message;
                 })
                 .finally(() => {                    
-                    document.getElementById('spinner').style.display = 'none';               
-                    document.getElementById('downloadBtn').style.display = 'block';                    
+                    document.getElementById('spinner').style.display = 'none';           
+                                        
                     document.getElementById('output').style.display = 'block'; 
                 });
             }

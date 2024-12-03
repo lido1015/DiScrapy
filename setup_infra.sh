@@ -22,7 +22,7 @@ fi
 
 # check router:base docker image existence 
 
-docker image inspect router >/dev/null 2>&1
+docker image inspect router:base >/dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo "Image router:base exists."
 else
@@ -58,3 +58,47 @@ docker network connect --ip 10.0.10.254 clients router
 docker network connect --ip 10.0.11.254 servers router
 
 echo "Container router connected to client and server networks."
+
+
+# check client:base docker image existence 
+
+docker image inspect client:base >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "Image client:base exists."
+else
+    docker build -t client:base -f client/client_base.Dockerfile client/
+    echo "Image client:base created."
+fi
+
+
+# check client docker image existence 
+
+docker image inspect client >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "Image client exists."
+else
+    docker build -t client -f client/client.Dockerfile client/
+    echo "Image client created."
+fi
+
+
+# check server:base docker image existence 
+
+docker image inspect server:base >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "Image server:base exists."
+else
+    docker build -t server:base -f server/server_base.Dockerfile server/
+    echo "Image server:base created."
+fi
+
+
+# check server docker image existence 
+
+docker image inspect server >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "Image server exists."
+else
+    docker build -t server -f server/server.Dockerfile server/
+    echo "Image server created."
+fi
