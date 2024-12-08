@@ -34,7 +34,7 @@ def scrape(url: str) -> None:
 
 def create_folder(url: str) -> str:
 
-    folder_name = name_from_url(url)
+    folder_name = url[:-1].split("//")[-1].replace("/", "_")
     
     folder_path = os.path.join('storage', folder_name)
 
@@ -83,19 +83,3 @@ def compress(folder):
                 zipf.write(file_path, os.path.relpath(file_path, folder))
 
     shutil.rmtree(folder)  
-
-
-def name_from_url(url):
-    if url[-1] == '/':
-        url = url[:-1]
-    return url.split("//")[-1].replace("/", "_")
-
-def zip_name(url):
-    zip_name = name_from_url(url)   
-    return f"{zip_name}.zip"
-
-
-
-
-
-

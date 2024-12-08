@@ -6,7 +6,7 @@ import os
 import sys
 import argparse
 
-from scraper import scrape, zip_name
+from scraper import scrape
 
 
 class ScraperServer():
@@ -15,22 +15,25 @@ class ScraperServer():
         self.app = FastAPI()        
         self.configure_endpoints()        
         self.run(ip,port)
-        
+     
         
     def configure_endpoints(self):  
         
         @self.app.post("/scrape")        
         def scrape_request(url: str):
-            print("Scrapeando " + url)            
+                      
             try:    
                 if url not in self.storage:
-                    scrape(url)
-                    self.storage.append(url)
+                    print("Scraping " + url)  
+                    scrape(url)                    
                     update_storage(url) 
-                zip_file = zip_name(url)
+                    self.storage.append(url)
+                else:
+                    print(f"The url {url} is already scraped.")
+
+                zip_file = folder_name(url) + ".zip"
                 path = os.path.join('storage/', zip_file)
-                response = FileResponse(path=path,filename=zip_file,media_type='application/zip')        
-                response.headers['FILENAME'] = zip_file
+                response = FileResponse(path=path,filename=zip_file,media_type='application/zip')             
                 return response
             except Exception as e:                    
                 return {"error": str(e)}  
@@ -48,7 +51,11 @@ def read_storage() -> list[str]:
 
 def update_storage(url: str) -> None:
     with open('storage/index.txt', 'a') as archivo:        
-        archivo.write(url + '\n')     
+        archivo.write(url + '\n')   
+
+def folder_name(url):
+    url = url[:-1]
+    return url.split("//")[-1].replace("/", "_")  
 
 
 
