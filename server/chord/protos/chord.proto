@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+service ChordService {
+    rpc FindSuccessor(IdMessage) returns (NodeMessage);
+    rpc FindPredecessor(IdMessage) returns (NodeMessage);
+    rpc GetSuccessor(EmptyMessage) returns (NodeMessage);
+    rpc GetPredecessor(EmptyMessage) returns (NodeMessage);
+    rpc Notify(NodeMessage) returns (EmptyMessage);
+    rpc ReverseNotify(NodeMessage) returns (EmptyMessage);
+    rpc NotAloneNotify(NodeMessage) returns (EmptyMessage);
+    rpc Ping (EmptyMessage) returns (StatusResponseMessage);
+}
+
+message IdMessage {
+    uint64 id = 1;
+}
+
+message NodeMessage {
+    uint64 id = 1;
+    string ip = 2;
+    string port = 3;
+}
+
+message StatusResponseMessage {
+  bool ok = 1;
+}
+
+message EmptyMessage {}
