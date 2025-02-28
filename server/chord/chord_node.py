@@ -5,9 +5,9 @@ import threading
 import time
 
 import grpc
-from chord_client import Chord_gRPC_Client
-from protos.chord_pb2 import NodeMessage, IdMessage, StatusResponseMessage, EmptyMessage
-import protos.chord_pb2_grpc as pb
+from chord.chord_client import Chord_gRPC_Client
+from chord.protos.chord_pb2 import NodeMessage, IdMessage, StatusResponseMessage, EmptyMessage
+import chord.protos.chord_pb2_grpc as pb
 
 import logging
 
@@ -49,30 +49,46 @@ class ChordNode(pb.ChordServiceServicer):
 
         self.contact_node = Chord_gRPC_Client("localhost", contact_port) if contact_port else None
         self.join(self.contact_node)        
-        self.start_server()
+        
 
     def start_server(self):
         self.server.start()
         logger.info(f"Nodo {self.port} iniciado con ID {self.id}")
         self._running = True
-        self._server_thread = threading.Thread(target=self.server.wait_for_termination)
+        self._server_thread = threading.Thread(target=self.server.wait_for_termination, daemon=True)
         self._server_thread.start()
         self._start_stabilizer()
         self._start_check_predecessor()
         self._start_logger()
+        
 
     def stop_server(self):
+        logger.info("Iniciando parada del servidor gRPC...")
         self._running = False
-        if self._stabilize_thread:
-            self._stabilize_thread.join()
-        if self._check_predecessor_thread:
-            self._check_predecessor_thread.join()
-        if self._logger_thread:
-            self._logger_thread.join()
-        self.server.stop(0)
-        if self._server_thread:
-            self._server_thread.join(timeout=5)
-        logger.info(f"Nodo {self.port} detenido")    
+        # Detener todos los hilos primero
+        for thread in [self._server_thread, self._stabilize_thread, 
+                    self._check_predecessor_thread, self._logger_thread]:
+            if thread and thread.is_alive():
+                thread.join(timeout=2)
+        # Detener servidor gRPC
+        if self.server:
+            self.server.stop(0.5).wait()
+            logger.info("Servidor gRPC detenido")
+
+
+
+        # self._running = False
+        # time.sleep(1)
+        # self.server.stop(5)
+        # if self._server_thread:
+        #     self._server_thread.join()
+        # if self._stabilize_thread:
+        #     self._stabilize_thread.join()
+        # if self._check_predecessor_thread:
+        #     self._check_predecessor_thread.join()
+        # if self._logger_thread:
+        #     self._logger_thread.join()
+        # logger.info(f"Nodo {self.port} detenido")    
 
     def _is_between(self, id: int, start: int, end: int) -> bool:
         if start < end:
@@ -189,7 +205,7 @@ class ChordNode(pb.ChordServiceServicer):
                 except Exception as e:
                     logger.error(f"Error en estabilización: {str(e)}")
                 time.sleep(5)
-        self._stabilize_thread = threading.Thread(target=stabilizer)
+        self._stabilize_thread = threading.Thread(target=stabilizer,daemon=True)
         self._stabilize_thread.start()
 
     def _stabilize(self):
@@ -223,9 +239,9 @@ class ChordNode(pb.ChordServiceServicer):
                 try:
                     self._check_predecessor()
                 except Exception as e:
-                    logger.error(f"Error en estabilización: {str(e)}")
+                    logger.error(f"Error en chequeo de predecesor: {str(e)}")
                 time.sleep(5)
-        self._check_predecessor_thread = threading.Thread(target=predecessor_checker)
+        self._check_predecessor_thread = threading.Thread(target=predecessor_checker,daemon=True)
         self._check_predecessor_thread.start()
 
     def _check_predecessor(self):
@@ -274,6 +290,7 @@ if __name__ == "__main__":
 
     try:
         node = ChordNode(port, contact_port)
+        node.start_server()
         while True:
             time.sleep(3600)
     except KeyboardInterrupt:

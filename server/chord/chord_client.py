@@ -1,5 +1,5 @@
-from protos.chord_pb2 import NodeMessage, IdMessage, EmptyMessage
-import protos.chord_pb2_grpc as pb
+from chord.protos.chord_pb2 import NodeMessage, IdMessage, EmptyMessage
+import chord.protos.chord_pb2_grpc as pb
 
 from contextlib import contextmanager
 import grpc
