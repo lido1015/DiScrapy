@@ -4,7 +4,9 @@ import sys
 import threading
 import time
 
+
 import grpc
+from chord.multicast_node import MulticastNode
 from chord.chord_client import Chord_gRPC_Client
 from chord.protos.chord_pb2 import NodeMessage, IdMessage, StatusResponseMessage, EmptyMessage
 import chord.protos.chord_pb2_grpc as pb
@@ -17,11 +19,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+
 def hash_key(key: str) -> int:
     return int(hashlib.sha1(key.encode()).hexdigest()[:16], 16) % (2**64)    
 
-class ChordNode(pb.ChordServiceServicer):
-    def __init__(self, ip, port, contact_ip):
+class ChordNode(pb.ChordServiceServicer, MulticastNode):
+    def __init__(self, ip, port):
         self.port = port
         self.id = hash_key(f"{ip}:{str(port)}")
         self.ip = ip        
@@ -44,10 +48,14 @@ class ChordNode(pb.ChordServiceServicer):
         self._stabilize_thread = None
         self._check_predecessor_thread = None
         self._logger_thread = None
+        self._multicast_thread = None
         self._running = False
 
-        self.contact_node = Chord_gRPC_Client(contact_ip, 50051) if contact_ip else None
-        self.join(self.contact_node)        
+        # Autodescubrimiento multicast
+        addr = self._discover_existing_nodes()
+        contact_node = Chord_gRPC_Client(addr[0],int(addr[1])) if addr else None
+        self.join(contact_node) 
+      
         
 
     def start_server(self):
@@ -56,6 +64,8 @@ class ChordNode(pb.ChordServiceServicer):
         self._running = True
         self._server_thread = threading.Thread(target=self.server.wait_for_termination, daemon=True)
         self._server_thread.start()
+        self._multicast_thread = threading.Thread(target=self._multicast_listener, daemon=True)
+        self._multicast_thread.start()
         self._start_stabilizer()
         self._start_check_predecessor()
         self._start_logger()
@@ -74,20 +84,7 @@ class ChordNode(pb.ChordServiceServicer):
             self.server.stop(0.5).wait()
             logger.info("Servidor gRPC detenido")
 
-
-
-        # self._running = False
-        # time.sleep(1)
-        # self.server.stop(5)
-        # if self._server_thread:
-        #     self._server_thread.join()
-        # if self._stabilize_thread:
-        #     self._stabilize_thread.join()
-        # if self._check_predecessor_thread:
-        #     self._check_predecessor_thread.join()
-        # if self._logger_thread:
-        #     self._logger_thread.join()
-        # logger.info(f"Nodo {self.port} detenido")    
+       
 
     def _is_between(self, id: int, start: int, end: int) -> bool:
         if start < end:

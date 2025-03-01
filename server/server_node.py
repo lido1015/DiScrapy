@@ -26,9 +26,9 @@ from scraper import scrape
 
 
 class ServerNode(ChordNode):
-    def __init__(self, fastapi_ip = "0.0.0.0", fastapi_port = 8000 , contact_ip=None):
+    def __init__(self, fastapi_ip = "0.0.0.0", fastapi_port = 8000):
         
-        super().__init__(socket.gethostbyname(socket.gethostname()),50051,contact_ip)
+        super().__init__(socket.gethostbyname(socket.gethostname()),50051)
         self.storage = read_storage()
         self.app = FastAPI()
         self.fastapi_port = fastapi_port
@@ -136,11 +136,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ip", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000) 
-    parser.add_argument("--contact_ip", type=str, default=None)   
+    
   
     try:
         args = parser.parse_args()     
-        node = ServerNode(args.ip, args.port, args.contact_ip)
+        node = ServerNode(args.ip, args.port)
         
         node.start()
         # Bucle no bloqueante
