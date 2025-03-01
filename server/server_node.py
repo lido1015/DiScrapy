@@ -13,26 +13,26 @@ logger = logging.getLogger(__name__)
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 import uvicorn
-import threading
 import time
+import socket
+import argparse
 
 from multiprocessing import Process
-
-
 import os
-import argparse
+
 
 from scraper import scrape
 
 
 
 class ServerNode(ChordNode):
-    def __init__(self, port, contact_port=None):
+    def __init__(self, fastapi_ip = "0.0.0.0", fastapi_port = 8000 , contact_ip=None):
         
-        super().__init__(port, contact_port)
+        super().__init__(socket.gethostbyname(socket.gethostname()),50051,contact_ip)
         self.storage = read_storage()
         self.app = FastAPI()
-        self.fastapi_port = int(port) + 1  
+        self.fastapi_port = fastapi_port
+        self.fastapi_ip = fastapi_ip
         self.configure_endpoints()
         self.fastapi_process = None
 
@@ -42,6 +42,7 @@ class ServerNode(ChordNode):
     def _graceful_shutdown(self, signum, frame):
         logger.info("Señal de terminación recibida")
         self.stop()
+        sys.exit(0)
 
     def start(self):
         """Inicia gRPC en el hilo principal y FastAPI en proceso separado"""
@@ -54,17 +55,18 @@ class ServerNode(ChordNode):
     def _start_fastapi_process(self):
         """Crea y arranca el proceso de FastAPI"""
         
-        self.fastapi_process = Process(target = uvicorn.run(self.app,host="localhost",port=self.fastapi_port))
+        self.fastapi_process = Process(target = uvicorn.run(self.app,host=self.fastapi_ip,port=self.fastapi_port))
         self.fastapi_process.start()
 
   
 
     def stop(self):
         """Detiene ambos servicios limpiamente"""
-        super().stop_server()  # Detiene gRPC
-        if self.fastapi_process:
+        self.stop_server()  # Detiene gRPC
+        if self.fastapi_process and self.fastapi_process.is_alive():
             self.fastapi_process.terminate()  # Detiene FastAPI
-            self.fastapi_process.join(timeout=2)
+            self.fastapi_process.join()
+            self.fastapi_process = None
             logger.info("Servidor FastAPI detenido")
         
    
@@ -131,22 +133,15 @@ def folder_name(url):
 
 
 def main():
-    import multiprocessing
-    multiprocessing.set_start_method('spawn')
-
-    
-
-
-    if len(sys.argv) < 2:
-        print("Uso: python chord_node.py <puerto> [puerto_contacto]")
-        sys.exit(1)
-
-    port = sys.argv[1]
-    contact_port = sys.argv[2] if len(sys.argv) > 2 else None    
-
-    node = ServerNode(port,contact_port)
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ip", type=str, default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8000) 
+    parser.add_argument("--contact_ip", type=str, default=None)   
+  
     try:
+        args = parser.parse_args()     
+        node = ServerNode(args.ip, args.port, args.contact_ip)
+        
         node.start()
         # Bucle no bloqueante
         while node._running:  # Acceso directo al flag por simplicidad

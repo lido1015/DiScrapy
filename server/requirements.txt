@@ -3,3 +3,5 @@ uvicorn
 bs4
 requests
 urljoin
+protobuf
+grpcio

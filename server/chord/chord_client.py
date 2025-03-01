@@ -1,5 +1,6 @@
 from chord.protos.chord_pb2 import NodeMessage, IdMessage, EmptyMessage
 import chord.protos.chord_pb2_grpc as pb
+import hashlib
 
 from contextlib import contextmanager
 import grpc
@@ -12,7 +13,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
+def hash_key(key: str) -> int:
+    return int(hashlib.sha1(key.encode()).hexdigest()[:16], 16) % (2**64)  
 
 class Chord_gRPC_Client :    
     def __init__(self, ip, port):        
@@ -26,8 +28,7 @@ class Chord_gRPC_Client :
         Returns:
             None
         """
-        #self.id = hash_key(port)
-        self.id = int(port)
+        self.id = hash_key(f"{ip}:{str(port)}")       
         self.ip = ip
         self.port = port
 

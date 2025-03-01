@@ -21,11 +21,10 @@ def hash_key(key: str) -> int:
     return int(hashlib.sha1(key.encode()).hexdigest()[:16], 16) % (2**64)    
 
 class ChordNode(pb.ChordServiceServicer):
-    def __init__(self, port, contact_port):
+    def __init__(self, ip, port, contact_ip):
         self.port = port
-        self.id = int(port)
-        self.ip = "localhost"
-        self.contact_port = contact_port
+        self.id = hash_key(f"{ip}:{str(port)}")
+        self.ip = ip        
 
         self.grpc_client = Chord_gRPC_Client(self.ip, self.port)
         
@@ -47,13 +46,13 @@ class ChordNode(pb.ChordServiceServicer):
         self._logger_thread = None
         self._running = False
 
-        self.contact_node = Chord_gRPC_Client("localhost", contact_port) if contact_port else None
+        self.contact_node = Chord_gRPC_Client(contact_ip, 50051) if contact_ip else None
         self.join(self.contact_node)        
         
 
     def start_server(self):
         self.server.start()
-        logger.info(f"Nodo {self.port} iniciado con ID {self.id}")
+        logger.info(f"Nodo {self.ip} iniciado con ID {self.id}")
         self._running = True
         self._server_thread = threading.Thread(target=self.server.wait_for_termination, daemon=True)
         self._server_thread.start()
@@ -147,12 +146,12 @@ class ChordNode(pb.ChordServiceServicer):
                 if not current_predecessor:
                     self.predecessor = node
                     self.predecessor_of_predecessor = node.get_predecessor()
-                    logger.info(f"Predecesor actualizado a {request.port}")
+                    logger.info(f"Predecesor actualizado a {request.id}")
                 elif node.ping():
                     if self._is_between(node.id, current_predecessor.id, self.id):
                         self.predecessor_of_predecessor = self.predecessor
                         self.predecessor = node
-                        logger.info(f"Predecesor actualizado a {request.port}")                 
+                        logger.info(f"Predecesor actualizado a {request.id}")                 
         except Exception as e:
             logger.error(f"Error en Notify: {str(e)}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -179,12 +178,12 @@ class ChordNode(pb.ChordServiceServicer):
     def join(self, node: Chord_gRPC_Client): 
         if node:
             if not node.ping():
-                logger.error(f"Error en join, el nodo {node.port} no responde")
+                logger.error(f"Error en join, el nodo {node.id} no responde")
                 return         
             
             with self.successor_lock:
                 self.successor = node.find_successor(self.id)
-            logger.info(f"Unido a la red. Sucesor: {self.successor.port}")            
+            logger.info(f"Unido a la red. Sucesor: {self.successor.id}")            
             
             # Second node joins to chord ring
             if self.successor.get_successor().id == self.successor.id:
@@ -195,7 +194,7 @@ class ChordNode(pb.ChordServiceServicer):
         else:
             logging.info("Nueva red creada")
             self.successor = self.grpc_client            
-            logger.info(f"Unido a la red. Sucesor: {self.successor.port}")          
+            logger.info(f"Unido a la red. Sucesor: {self.successor.id}")          
 
     def _start_stabilizer(self):
         def stabilizer():
@@ -220,7 +219,7 @@ class ChordNode(pb.ChordServiceServicer):
             if pred_node and self._is_between(pred_node.id, self.id, successor.id) and (pred_node.id != successor.id):                
                 with self.successor_lock:
                     self.successor = pred_node
-                    logger.info(f"Sucesor actualizado a {pred_node.port} durante estabilización")
+                    logger.info(f"Sucesor actualizado a {pred_node.id} durante estabilización")
             
             self.successor.notify(self.grpc_client.node)
 
@@ -247,14 +246,14 @@ class ChordNode(pb.ChordServiceServicer):
     def _check_predecessor(self):
         try:
             if self.predecessor and not self.predecessor.ping():
-                logger.info(f"Predecesor {self.predecessor.port} no responde, eliminando")
+                logger.info(f"Predecesor {self.predecessor.id} no responde, eliminando")
                 
                 if self.predecessor_of_predecessor.ping():
                     self.predecessor = self.predecessor_of_predecessor        
                 else:
                     self.predecessor = self.grpc_client.find_predecessor(self.predecessor_of_predecessor.id)
                 
-                logger.info(f"Predecesor actualizado a {self.predecessor.port} luego de haber caído")
+                logger.info(f"Predecesor actualizado a {self.predecessor.id} luego de haber caído")
                 self.predecessor_of_predecessor = self.predecessor.get_predecessor()
 
                 if self.id == self.predecessor.id:
@@ -272,9 +271,9 @@ class ChordNode(pb.ChordServiceServicer):
         def log_status():
             while self._running:
                 with self.successor_lock:
-                    succ = self.successor.port if self.successor else 'None'
+                    succ = self.successor.id if self.successor else 'None'
                 with self.predecessor_lock:
-                    pred = self.predecessor.port if self.predecessor else 'None'
+                    pred = self.predecessor.id if self.predecessor else 'None'
                 logger.info(f"Estado actual - Sucesor: {succ}, Predecesor: {pred}")
                 time.sleep(10)
         self._logger_thread = threading.Thread(target=log_status, daemon=True)
