@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 import uvicorn
 import time
 import socket
-import argparse
+
 
 from multiprocessing import Process
 import os
@@ -24,15 +24,18 @@ import os
 from scraper import scrape
 
 
+HOST = "0.0.0.0"
+PORT = 8000
+
 
 class ServerNode(ChordNode):
-    def __init__(self, fastapi_ip = "0.0.0.0", fastapi_port = 8000):
+    def __init__(self):
         
-        super().__init__(socket.gethostbyname(socket.gethostname()),50051)
+        super().__init__(socket.gethostbyname(socket.gethostname()),)
         self.storage = read_storage()
         self.app = FastAPI()
-        self.fastapi_port = fastapi_port
-        self.fastapi_ip = fastapi_ip
+        self.fastapi_port = PORT
+        self.fastapi_ip = HOST
         self.configure_endpoints()
         self.fastapi_process = None
 
@@ -107,40 +110,16 @@ def update_storage(url: str) -> None:
 
 def folder_name(url):
     url = url[:-1]
-    return url.split("//")[-1].replace("/", "_")  
+    return url.split("//")[-1].replace("/", "_")
 
 
 
-# def main():
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument("--ip", type=str, default="127.0.0.1")
-#     parser.add_argument("--port", type=str, default=10000)    
-#     parser.add_argument("--contact_port", type=str, default=None)
 
-#     try:
-#         args = parser.parse_args()     
-#         node = ServerNode(args.port, args.contact_port)
-#         while True:
-#             time.sleep(3600)
-#     except SystemExit as e:
-#         print(f"Error: {e}, argumentos recibidos: {sys.argv}")   
-#     except KeyboardInterrupt:
-#         logger.info("\nInterrupción recibida")
-#     except Exception as e:
-#         logger.error(f"Error crítico: {str(e)}")
-#     finally:
-#         node.stop_server()  
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--ip", type=str, default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8000) 
+def main():    
     
   
-    try:
-        args = parser.parse_args()     
-        node = ServerNode(args.ip, args.port)
+    try:          
+        node = ServerNode()
         
         node.start()
         # Bucle no bloqueante

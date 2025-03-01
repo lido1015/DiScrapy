@@ -10,12 +10,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Configuración multicast
 MULTICAST_GROUP = '224.0.0.1'
 MULTICAST_PORT = 5000
-DISCOVERY_TIMEOUT = 2  # segundos
+DISCOVERY_TIMEOUT = 2  
+
 
 class MulticastNode():
+    
     def _discover_existing_nodes(self):
         """Envía multicast para descubrir nodos existentes"""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
