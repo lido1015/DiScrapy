@@ -34,88 +34,88 @@ class ChordServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.FindSuccessor = channel.unary_unary(
-                '/ChordService/FindSuccessor',
+        self.FindSucc = channel.unary_unary(
+                '/ChordService/FindSucc',
                 request_serializer=chord__pb2.IdMessage.SerializeToString,
-                response_deserializer=chord__pb2.NodeMessage.FromString,
+                response_deserializer=chord__pb2.IpMessage.FromString,
                 _registered_method=True)
-        self.FindPredecessor = channel.unary_unary(
-                '/ChordService/FindPredecessor',
+        self.FindPred = channel.unary_unary(
+                '/ChordService/FindPred',
                 request_serializer=chord__pb2.IdMessage.SerializeToString,
-                response_deserializer=chord__pb2.NodeMessage.FromString,
+                response_deserializer=chord__pb2.IpMessage.FromString,
                 _registered_method=True)
-        self.GetSuccessor = channel.unary_unary(
-                '/ChordService/GetSuccessor',
+        self.GetSucc = channel.unary_unary(
+                '/ChordService/GetSucc',
                 request_serializer=chord__pb2.EmptyMessage.SerializeToString,
-                response_deserializer=chord__pb2.NodeMessage.FromString,
+                response_deserializer=chord__pb2.IpMessage.FromString,
                 _registered_method=True)
-        self.GetPredecessor = channel.unary_unary(
-                '/ChordService/GetPredecessor',
+        self.GetPred = channel.unary_unary(
+                '/ChordService/GetPred',
                 request_serializer=chord__pb2.EmptyMessage.SerializeToString,
-                response_deserializer=chord__pb2.NodeMessage.FromString,
+                response_deserializer=chord__pb2.IpMessage.FromString,
                 _registered_method=True)
-        self.Notify = channel.unary_unary(
-                '/ChordService/Notify',
-                request_serializer=chord__pb2.NodeMessage.SerializeToString,
+        self.UpdatePred = channel.unary_unary(
+                '/ChordService/UpdatePred',
+                request_serializer=chord__pb2.IpMessage.SerializeToString,
                 response_deserializer=chord__pb2.EmptyMessage.FromString,
                 _registered_method=True)
-        self.ReverseNotify = channel.unary_unary(
-                '/ChordService/ReverseNotify',
-                request_serializer=chord__pb2.NodeMessage.SerializeToString,
+        self.UpdateSucc = channel.unary_unary(
+                '/ChordService/UpdateSucc',
+                request_serializer=chord__pb2.IpMessage.SerializeToString,
                 response_deserializer=chord__pb2.EmptyMessage.FromString,
                 _registered_method=True)
-        self.NotAloneNotify = channel.unary_unary(
-                '/ChordService/NotAloneNotify',
-                request_serializer=chord__pb2.NodeMessage.SerializeToString,
+        self.NotAlone = channel.unary_unary(
+                '/ChordService/NotAlone',
+                request_serializer=chord__pb2.IpMessage.SerializeToString,
                 response_deserializer=chord__pb2.EmptyMessage.FromString,
                 _registered_method=True)
         self.Ping = channel.unary_unary(
                 '/ChordService/Ping',
                 request_serializer=chord__pb2.EmptyMessage.SerializeToString,
-                response_deserializer=chord__pb2.StatusResponseMessage.FromString,
+                response_deserializer=chord__pb2.StatusMessage.FromString,
                 _registered_method=True)
 
 
 class ChordServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def FindSuccessor(self, request, context):
+    def FindSucc(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def FindPredecessor(self, request, context):
+    def FindPred(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetSuccessor(self, request, context):
+    def GetSucc(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def GetPredecessor(self, request, context):
+    def GetPred(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def Notify(self, request, context):
+    def UpdatePred(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ReverseNotify(self, request, context):
+    def UpdateSucc(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def NotAloneNotify(self, request, context):
+    def NotAlone(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -130,45 +130,45 @@ class ChordServiceServicer(object):
 
 def add_ChordServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'FindSuccessor': grpc.unary_unary_rpc_method_handler(
-                    servicer.FindSuccessor,
+            'FindSucc': grpc.unary_unary_rpc_method_handler(
+                    servicer.FindSucc,
                     request_deserializer=chord__pb2.IdMessage.FromString,
-                    response_serializer=chord__pb2.NodeMessage.SerializeToString,
+                    response_serializer=chord__pb2.IpMessage.SerializeToString,
             ),
-            'FindPredecessor': grpc.unary_unary_rpc_method_handler(
-                    servicer.FindPredecessor,
+            'FindPred': grpc.unary_unary_rpc_method_handler(
+                    servicer.FindPred,
                     request_deserializer=chord__pb2.IdMessage.FromString,
-                    response_serializer=chord__pb2.NodeMessage.SerializeToString,
+                    response_serializer=chord__pb2.IpMessage.SerializeToString,
             ),
-            'GetSuccessor': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetSuccessor,
+            'GetSucc': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSucc,
                     request_deserializer=chord__pb2.EmptyMessage.FromString,
-                    response_serializer=chord__pb2.NodeMessage.SerializeToString,
+                    response_serializer=chord__pb2.IpMessage.SerializeToString,
             ),
-            'GetPredecessor': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetPredecessor,
+            'GetPred': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetPred,
                     request_deserializer=chord__pb2.EmptyMessage.FromString,
-                    response_serializer=chord__pb2.NodeMessage.SerializeToString,
+                    response_serializer=chord__pb2.IpMessage.SerializeToString,
             ),
-            'Notify': grpc.unary_unary_rpc_method_handler(
-                    servicer.Notify,
-                    request_deserializer=chord__pb2.NodeMessage.FromString,
+            'UpdatePred': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdatePred,
+                    request_deserializer=chord__pb2.IpMessage.FromString,
                     response_serializer=chord__pb2.EmptyMessage.SerializeToString,
             ),
-            'ReverseNotify': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReverseNotify,
-                    request_deserializer=chord__pb2.NodeMessage.FromString,
+            'UpdateSucc': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateSucc,
+                    request_deserializer=chord__pb2.IpMessage.FromString,
                     response_serializer=chord__pb2.EmptyMessage.SerializeToString,
             ),
-            'NotAloneNotify': grpc.unary_unary_rpc_method_handler(
-                    servicer.NotAloneNotify,
-                    request_deserializer=chord__pb2.NodeMessage.FromString,
+            'NotAlone': grpc.unary_unary_rpc_method_handler(
+                    servicer.NotAlone,
+                    request_deserializer=chord__pb2.IpMessage.FromString,
                     response_serializer=chord__pb2.EmptyMessage.SerializeToString,
             ),
             'Ping': grpc.unary_unary_rpc_method_handler(
                     servicer.Ping,
                     request_deserializer=chord__pb2.EmptyMessage.FromString,
-                    response_serializer=chord__pb2.StatusResponseMessage.SerializeToString,
+                    response_serializer=chord__pb2.StatusMessage.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -182,7 +182,7 @@ class ChordService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def FindSuccessor(request,
+    def FindSucc(request,
             target,
             options=(),
             channel_credentials=None,
@@ -195,9 +195,9 @@ class ChordService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ChordService/FindSuccessor',
+            '/ChordService/FindSucc',
             chord__pb2.IdMessage.SerializeToString,
-            chord__pb2.NodeMessage.FromString,
+            chord__pb2.IpMessage.FromString,
             options,
             channel_credentials,
             insecure,
@@ -209,7 +209,7 @@ class ChordService(object):
             _registered_method=True)
 
     @staticmethod
-    def FindPredecessor(request,
+    def FindPred(request,
             target,
             options=(),
             channel_credentials=None,
@@ -222,9 +222,9 @@ class ChordService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ChordService/FindPredecessor',
+            '/ChordService/FindPred',
             chord__pb2.IdMessage.SerializeToString,
-            chord__pb2.NodeMessage.FromString,
+            chord__pb2.IpMessage.FromString,
             options,
             channel_credentials,
             insecure,
@@ -236,7 +236,7 @@ class ChordService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetSuccessor(request,
+    def GetSucc(request,
             target,
             options=(),
             channel_credentials=None,
@@ -249,9 +249,9 @@ class ChordService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ChordService/GetSuccessor',
+            '/ChordService/GetSucc',
             chord__pb2.EmptyMessage.SerializeToString,
-            chord__pb2.NodeMessage.FromString,
+            chord__pb2.IpMessage.FromString,
             options,
             channel_credentials,
             insecure,
@@ -263,7 +263,7 @@ class ChordService(object):
             _registered_method=True)
 
     @staticmethod
-    def GetPredecessor(request,
+    def GetPred(request,
             target,
             options=(),
             channel_credentials=None,
@@ -276,9 +276,9 @@ class ChordService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ChordService/GetPredecessor',
+            '/ChordService/GetPred',
             chord__pb2.EmptyMessage.SerializeToString,
-            chord__pb2.NodeMessage.FromString,
+            chord__pb2.IpMessage.FromString,
             options,
             channel_credentials,
             insecure,
@@ -290,7 +290,7 @@ class ChordService(object):
             _registered_method=True)
 
     @staticmethod
-    def Notify(request,
+    def UpdatePred(request,
             target,
             options=(),
             channel_credentials=None,
@@ -303,8 +303,8 @@ class ChordService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ChordService/Notify',
-            chord__pb2.NodeMessage.SerializeToString,
+            '/ChordService/UpdatePred',
+            chord__pb2.IpMessage.SerializeToString,
             chord__pb2.EmptyMessage.FromString,
             options,
             channel_credentials,
@@ -317,7 +317,7 @@ class ChordService(object):
             _registered_method=True)
 
     @staticmethod
-    def ReverseNotify(request,
+    def UpdateSucc(request,
             target,
             options=(),
             channel_credentials=None,
@@ -330,8 +330,8 @@ class ChordService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ChordService/ReverseNotify',
-            chord__pb2.NodeMessage.SerializeToString,
+            '/ChordService/UpdateSucc',
+            chord__pb2.IpMessage.SerializeToString,
             chord__pb2.EmptyMessage.FromString,
             options,
             channel_credentials,
@@ -344,7 +344,7 @@ class ChordService(object):
             _registered_method=True)
 
     @staticmethod
-    def NotAloneNotify(request,
+    def NotAlone(request,
             target,
             options=(),
             channel_credentials=None,
@@ -357,8 +357,8 @@ class ChordService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/ChordService/NotAloneNotify',
-            chord__pb2.NodeMessage.SerializeToString,
+            '/ChordService/NotAlone',
+            chord__pb2.IpMessage.SerializeToString,
             chord__pb2.EmptyMessage.FromString,
             options,
             channel_credentials,
@@ -386,7 +386,7 @@ class ChordService(object):
             target,
             '/ChordService/Ping',
             chord__pb2.EmptyMessage.SerializeToString,
-            chord__pb2.StatusResponseMessage.FromString,
+            chord__pb2.StatusMessage.FromString,
             options,
             channel_credentials,
             insecure,

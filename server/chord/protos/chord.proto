@@ -1,27 +1,25 @@
 syntax = "proto3";
 
 service ChordService {
-    rpc FindSuccessor(IdMessage) returns (NodeMessage);
-    rpc FindPredecessor(IdMessage) returns (NodeMessage);
-    rpc GetSuccessor(EmptyMessage) returns (NodeMessage);
-    rpc GetPredecessor(EmptyMessage) returns (NodeMessage);
-    rpc Notify(NodeMessage) returns (EmptyMessage);
-    rpc ReverseNotify(NodeMessage) returns (EmptyMessage);
-    rpc NotAloneNotify(NodeMessage) returns (EmptyMessage);
-    rpc Ping (EmptyMessage) returns (StatusResponseMessage);
+    rpc FindSucc(IdMessage) returns (IpMessage);
+    rpc FindPred(IdMessage) returns (IpMessage);
+    rpc GetSucc(EmptyMessage) returns (IpMessage);
+    rpc GetPred(EmptyMessage) returns (IpMessage);
+    rpc UpdatePred(IpMessage) returns (EmptyMessage);
+    rpc UpdateSucc(IpMessage) returns (EmptyMessage);
+    rpc NotAlone(IpMessage) returns (EmptyMessage);
+    rpc Ping (EmptyMessage) returns (StatusMessage);
 }
 
 message IdMessage {
     uint64 id = 1;
 }
 
-message NodeMessage {
-    uint64 id = 1;
-    string ip = 2;
-    uint64 port = 3;
+message IpMessage {    
+    string ip = 1;    
 }
 
-message StatusResponseMessage {
+message StatusMessage {
   bool ok = 1;
 }
 

@@ -17,30 +17,38 @@ import time
 import socket
 
 
-from multiprocessing import Process
+from multiprocessing import Process, Queue, Manager
 import os
 
 
 from scraper import scrape
 
 
-HOST = "0.0.0.0"
-PORT = 8000
+API_HOST = "0.0.0.0"
+API_PORT = 8000
 
 
 class ServerNode(ChordNode):
     def __init__(self):
-        
+
         super().__init__(socket.gethostbyname(socket.gethostname()),)
+        
+        # Configuración de procesos y recursos compartidos
+        self.manager = Manager()
+        self.task_queue = Queue()
+        self.shared_storage = self.manager.list()
+        self.active = self.manager.Value('b', True)
+
         self.storage = read_storage()
         self.app = FastAPI()
-        self.fastapi_port = PORT
-        self.fastapi_ip = HOST
+        
+        
         self.configure_endpoints()
         self.fastapi_process = None
 
         signal.signal(signal.SIGINT, self._graceful_shutdown)
         signal.signal(signal.SIGTERM, self._graceful_shutdown)
+        
 
     def _graceful_shutdown(self, signum, frame):
         logger.info("Señal de terminación recibida")
@@ -58,7 +66,7 @@ class ServerNode(ChordNode):
     def _start_fastapi_process(self):
         """Crea y arranca el proceso de FastAPI"""
         
-        self.fastapi_process = Process(target = uvicorn.run(self.app,host=self.fastapi_ip,port=self.fastapi_port))
+        self.fastapi_process = Process(target = uvicorn.run(self.app,host=API_HOST,port=API_PORT))
         self.fastapi_process.start()
 
   

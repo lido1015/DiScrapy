@@ -33,9 +33,9 @@ class MulticastNode():
                            socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton('0.0.0.0'))            
             
             data, _ = sock.recvfrom(1024)
-            ip, port = data.decode().split(':')
-            logger.info(f"Nodo descubierto: {ip}:{port}")
-            return [ip, int(port)]
+            ip = data.decode()
+            logger.info(f"Nodo descubierto: {ip}")
+            return ip
         except socket.timeout:
             logger.info("No se encontraron nodos existentes. Iniciando nueva red.")
             return None
@@ -58,7 +58,7 @@ class MulticastNode():
                 data, addr = sock.recvfrom(1024)
                 if data == b'DISCOVER':
                     # Responde con nuestra información
-                    response = f"{self.ip}:{self.port}".encode()
+                    response = f"{self.ip}".encode()
                     sock.sendto(response, addr)
                     logger.info(f"Respondiendo a descubrimiento desde {addr}")
             except Exception as e:

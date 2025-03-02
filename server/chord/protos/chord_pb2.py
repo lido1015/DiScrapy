@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x63hord.proto\"\x17\n\tIdMessage\x12\n\n\x02id\x18\x01 \x01(\x04\"3\n\x0bNodeMessage\x12\n\n\x02id\x18\x01 \x01(\x04\x12\n\n\x02ip\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\x04\"#\n\x15StatusResponseMessage\x12\n\n\x02ok\x18\x01 \x01(\x08\"\x0e\n\x0c\x45mptyMessage2\xf5\x02\n\x0c\x43hordService\x12)\n\rFindSuccessor\x12\n.IdMessage\x1a\x0c.NodeMessage\x12+\n\x0f\x46indPredecessor\x12\n.IdMessage\x1a\x0c.NodeMessage\x12+\n\x0cGetSuccessor\x12\r.EmptyMessage\x1a\x0c.NodeMessage\x12-\n\x0eGetPredecessor\x12\r.EmptyMessage\x1a\x0c.NodeMessage\x12%\n\x06Notify\x12\x0c.NodeMessage\x1a\r.EmptyMessage\x12,\n\rReverseNotify\x12\x0c.NodeMessage\x1a\r.EmptyMessage\x12-\n\x0eNotAloneNotify\x12\x0c.NodeMessage\x1a\r.EmptyMessage\x12-\n\x04Ping\x12\r.EmptyMessage\x1a\x16.StatusResponseMessageb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x63hord.proto\"\x17\n\tIdMessage\x12\n\n\x02id\x18\x01 \x01(\x04\"\x17\n\tIpMessage\x12\n\n\x02ip\x18\x01 \x01(\t\"\x1b\n\rStatusMessage\x12\n\n\x02ok\x18\x01 \x01(\x08\"\x0e\n\x0c\x45mptyMessage2\xc2\x02\n\x0c\x43hordService\x12\"\n\x08\x46indSucc\x12\n.IdMessage\x1a\n.IpMessage\x12\"\n\x08\x46indPred\x12\n.IdMessage\x1a\n.IpMessage\x12$\n\x07GetSucc\x12\r.EmptyMessage\x1a\n.IpMessage\x12$\n\x07GetPred\x12\r.EmptyMessage\x1a\n.IpMessage\x12\'\n\nUpdatePred\x12\n.IpMessage\x1a\r.EmptyMessage\x12\'\n\nUpdateSucc\x12\n.IpMessage\x1a\r.EmptyMessage\x12%\n\x08NotAlone\x12\n.IpMessage\x1a\r.EmptyMessage\x12%\n\x04Ping\x12\r.EmptyMessage\x1a\x0e.StatusMessageb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,12 +33,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_IDMESSAGE']._serialized_start=15
   _globals['_IDMESSAGE']._serialized_end=38
-  _globals['_NODEMESSAGE']._serialized_start=40
-  _globals['_NODEMESSAGE']._serialized_end=91
-  _globals['_STATUSRESPONSEMESSAGE']._serialized_start=93
-  _globals['_STATUSRESPONSEMESSAGE']._serialized_end=128
-  _globals['_EMPTYMESSAGE']._serialized_start=130
-  _globals['_EMPTYMESSAGE']._serialized_end=144
-  _globals['_CHORDSERVICE']._serialized_start=147
-  _globals['_CHORDSERVICE']._serialized_end=520
+  _globals['_IPMESSAGE']._serialized_start=40
+  _globals['_IPMESSAGE']._serialized_end=63
+  _globals['_STATUSMESSAGE']._serialized_start=65
+  _globals['_STATUSMESSAGE']._serialized_end=92
+  _globals['_EMPTYMESSAGE']._serialized_start=94
+  _globals['_EMPTYMESSAGE']._serialized_end=108
+  _globals['_CHORDSERVICE']._serialized_start=111
+  _globals['_CHORDSERVICE']._serialized_end=433
 # @@protoc_insertion_point(module_scope)
