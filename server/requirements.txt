@@ -7,3 +7,4 @@ urljoin
 protobuf
 grpcio
 asyncio
+python-multipart

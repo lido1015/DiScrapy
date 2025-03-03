@@ -1,17 +1,50 @@
 import os
+import hashlib
 import zipfile
 import shutil
-
 import requests
 from bs4 import BeautifulSoup
-
 import urljoin
 from urllib.parse import urljoin
 
 
+    #============CHORD============
+
+def hash_key(key: str, m: int) -> int:
+    return int(hashlib.sha1(key.encode()).hexdigest()[:16], 16) % (2**m)
+
+def is_between(k: int, start: int, end: int) -> bool:
+    if start < end:
+        return start < k <= end
+    else:  # The interval wraps around 0
+        return start < k or k <= end    
 
 
-def scrape(url: str, path: str, only_http = True) -> None:
+    #============MANAGE STORAGE============
+
+def read_storage(storage_dir) -> set:
+    list = []
+    index_file = os.path.join(storage_dir, 'index.txt')
+    if os.path.exists(index_file):
+        with open(index_file, 'r') as archivo:
+            list = archivo.read().splitlines()
+    return set(list)
+
+def update_storage(storage_dir, url: str) -> None:
+    index_file = os.path.join(storage_dir, 'index.txt')
+    with open(index_file, 'a') as archivo:        
+        archivo.write(url + '\n')   
+
+def get_folder_name(url):
+    url = url[:-1]
+    return url.split("//")[-1].replace("/", "_")
+
+
+
+    #============SCRAPING============
+
+
+def scrape(url: str, path: str, only_html = True) -> None:
 
     response = requests.get(url)
     
@@ -24,7 +57,7 @@ def scrape(url: str, path: str, only_http = True) -> None:
         with open(os.path.join(folder, 'index.html'), 'w', encoding='utf-8') as f:
             f.write(soup.prettify(formatter="html")) 
 
-        if not only_http:
+        if not only_html:
             download_files(url, soup, folder)
 
         compress(folder)
@@ -35,7 +68,7 @@ def scrape(url: str, path: str, only_http = True) -> None:
 
 def create_folder(url: str, path: str) -> str:
 
-    folder_name = url[:-1].split("//")[-1].replace("/", "_")
+    folder_name = get_folder_name(url)
     
     folder_path = os.path.join(path, folder_name)
 

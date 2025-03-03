@@ -4,7 +4,7 @@ import time
 import grpc
 
 from chord.multicast_node import MulticastNode
-from utils.utils import hash_key, is_between
+from utils import hash_key, is_between
 
 from chord.grpc_connection import GRPCConnection
 from chord.protos.chord_pb2 import IpMessage, IdMessage, StatusMessage, EmptyMessage

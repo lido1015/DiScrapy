@@ -1,7 +1,7 @@
 from chord.protos.chord_pb2 import IpMessage, IdMessage, EmptyMessage
 import chord.protos.chord_pb2_grpc as pb
 
-from utils.utils import hash_key
+from utils import hash_key
 
 from contextlib import contextmanager
 import grpc
