@@ -1,4 +1,4 @@
-FROM python:3.11-alpine
+FROM python:3-alpine
 
 # Instala dependencias del sistema (necesario para grpcio)
 RUN apk add --no-cache g++ linux-headers

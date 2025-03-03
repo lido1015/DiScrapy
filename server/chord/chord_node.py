@@ -454,7 +454,7 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
                 with self.pred_lock:
                     pred = self.pred.id if self.pred else 'None'
                 logger.info(f"Estado actual - Sucesor: {succ}, Predecesor: {pred}")
-                time.sleep(10)
+                time.sleep(20)
         self._logger_thread = threading.Thread(target=log_status, daemon=True)
         self._logger_thread.start()
 

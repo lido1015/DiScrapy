@@ -9,3 +9,4 @@ ip route del default
 ip route add default via $Router
 
 python client.py $@
+

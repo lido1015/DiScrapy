@@ -14,7 +14,6 @@ MULTICAST_GROUP = '224.0.0.1'
 MULTICAST_PORT = 5000
 DISCOVERY_TIMEOUT = 2  
 
-
 class MulticastNode():
     
     def _discover_existing_nodes(self):
@@ -65,5 +64,3 @@ class MulticastNode():
                 continue            
             finally:
                 sock.close()
-
-

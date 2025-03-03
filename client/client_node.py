@@ -1,16 +1,38 @@
 import os
 import sys
-import argparse
 import zipfile
 import requests
+import socket
+import shutil
+import struct
+import argparse
+import time
 
 import streamlit as st
 
-class Client:
-    def __init__(self, entry_addr):
-        self.entry_addr = entry_addr   
-        self.already_scraped_urls = read_local_storage()     
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+MULTICAST_GROUP = '224.0.0.1'
+MULTICAST_PORT = 5000
+DISCOVERY_TIMEOUT = 5 
+
+class ClientNode:
+    def __init__(self, server):
+        self.server = server        
+        self.ip = socket.gethostbyname(socket.gethostname())
+        self.storage_dir = self.create_storage_dir()
+        self.already_scraped_urls = set()    
         self.setup_ui()
+    
+    def create_storage_dir(self):        
+        storage_dir = os.path.join('REQUESTS', self.ip)
+        os.makedirs(storage_dir, exist_ok=True)
+        return storage_dir
 
     def setup_ui(self):
         # Set the page configuration
@@ -35,7 +57,15 @@ class Client:
             with st.spinner("Scraping..."):
                 self.send_url(url)
 
+
     def send_url(self, url):
+
+        # ips = self.discover_servers()
+        # ip = ips[0] if ips else None
+        # if not ip:
+        #     logger.info("No hay servidores disponibles")
+        #     return
+
         if not url:
             st.error("Please enter a valid URL.")
             return
@@ -43,19 +73,18 @@ class Client:
         if not url.endswith('/'):
             url += '/'
 
-        folder = folder_name(url)
+        folder = self.folder_name(url)
         
         if url not in self.already_scraped_urls:
 
-            print(f"Sending to server: {url}")
-            request_url = f"http://{self.entry_addr}/scrape/?url={url}"
+            logger.info(f"Sending to server: {url}")
+            request_url = f"http://{self.server}:8000/scrape?url={url}"
 
             try:
                 response = requests.post(request_url)
                 if response.status_code == 200:
                                     
-                    zip_path = folder + ".zip"
-                    print("1" + zip_path)
+                    zip_path = folder + ".zip"                    
 
                     with open(zip_path, 'wb') as file:
                         file.write(response.content)
@@ -64,8 +93,8 @@ class Client:
                         file_zip.extractall(folder)
                     os.remove(zip_path)
 
-                    update_local_storage(url)
-                    self.already_scraped_urls.append(url)                    
+                    self.update_local_storage(url)
+                    self.already_scraped_urls.add(url)                    
 
                 else:
                     st.error(f"Error downloading: {response.status_code}")
@@ -76,40 +105,83 @@ class Client:
         else:
             print(f"The url {url} is already scraped.")
 
-        print(folder)
+        
         with open(f"{folder}/index.html", 'r', encoding='utf-8') as html_file:
             html_content = html_file.read()
 
         #st.success("File downloaded and extracted successfully!")
         st.code(html_content, language='html')
 
+    def discover_servers(self):
+        """Envía multicast para descubrir nodos servidores existentes"""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(DISCOVERY_TIMEOUT)
+        ttl = struct.pack('b', 1)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
+        
+        try:
+            # Primero unirse al grupo multicast
+            sock.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP,
+                        socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton('0.0.0.0'))
+            
+            # Enviar solicitud de descubrimiento
+            sock.sendto(b'DISCOVER', (MULTICAST_GROUP, MULTICAST_PORT))
+            
+            # Recibir múltiples respuestas
+            ips = []
+            while True:
+                try:
+                    data, _ = sock.recvfrom(1024)
+                    ip = data.decode()
+                    logger.info(f"Nodo descubierto: {ip}")
+                    if ip not in ips:
+                        ips.append(ip)
+                except socket.timeout:
+                    break  # Finalizar al terminar el timeout
+            
+            return ips if ips else None
+            
+        except Exception as e:
+            logger.error(f"Error en descubrimiento: {str(e)}")
+            return None
+        finally:
+            # Dejar el grupo multicast antes de cerrar
+            sock.setsockopt(socket.SOL_IP, socket.IP_DROP_MEMBERSHIP,
+                        socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton('0.0.0.0'))
+            sock.close()
 
-def read_local_storage() -> list[str]:
-    list = []
-    with open('REQUESTS/index.txt', 'r') as archivo:
-        list = archivo.read().splitlines()
-    return list
 
-def update_local_storage(url: str) -> None:
-    with open('REQUESTS/index.txt', 'a') as archivo:        
-        archivo.write(url + '\n')  
+  
+    def shutdown(self):
+        shutil.rmtree(self.storage_dir, ignore_errors=True)
+        print(f"Storage directory {self.storage_dir} removed.")
 
-def folder_name(url):
-    url = url[:-1]
-    return "REQUESTS/" + url.split("//")[-1].replace("/", "_")
+
+    def read_local_storage(self) -> list[str]:
+        list = []
+        with open(f'{self.storage_dir}/index.txt', 'r') as archivo:
+            list = archivo.read().splitlines()
+        return list
+
+    def update_local_storage(self, url: str) -> None:
+        with open(f'{self.storage_dir}/index.txt', 'a') as archivo:        
+            archivo.write(url + '\n')  
+
+    def folder_name(self,url):
+        url = url[:-1]
+        return f"{self.storage_dir}/" + url.split("//")[-1].replace("/", "_")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--entry_addr", type=str)
+    parser.add_argument("--server", type=str, default="10.0.11.2")
 
     try:
         args = parser.parse_args()     
-        client = Client(args.entry_addr)  
+        client = ClientNode(args.server)  
     except SystemExit as e:
         print(f"Error: {e}, argumentos recibidos: {sys.argv}")   
 
 
 if __name__ == "__main__":
     main()
-
