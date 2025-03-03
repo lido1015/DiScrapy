@@ -11,20 +11,21 @@ from urllib.parse import urljoin
 
 
 
-def scrape(url: str) -> None:
+def scrape(url: str, path: str, only_http = True) -> None:
 
     response = requests.get(url)
     
     if response.status_code == 200:
 
-        folder = create_folder(url)
+        folder = create_folder(url,path)
         
         soup = BeautifulSoup(response.text, "html.parser")
         
         with open(os.path.join(folder, 'index.html'), 'w', encoding='utf-8') as f:
-            f.write(soup.prettify(formatter="html"))            
-        
-        download_files(url, soup, folder)
+            f.write(soup.prettify(formatter="html")) 
+
+        if not only_http:
+            download_files(url, soup, folder)
 
         compress(folder)
 
@@ -32,11 +33,11 @@ def scrape(url: str) -> None:
         raise Exception(f"Error accessing {url}: {response.status_code}")    
 
 
-def create_folder(url: str) -> str:
+def create_folder(url: str, path: str) -> str:
 
     folder_name = url[:-1].split("//")[-1].replace("/", "_")
     
-    folder_path = os.path.join('storage', folder_name)
+    folder_path = os.path.join(path, folder_name)
 
     try:
         os.mkdir(folder_path)        

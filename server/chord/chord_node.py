@@ -22,9 +22,26 @@ RPC_PORT = 50051
 M = 32
 
 class ChordNode(pb.ChordServiceServicer, MulticastNode):
-    def __init__(self, ip):      
-        
-        
+    """
+    Represents a node in a Chord distributed hash table (DHT) network
+    """
+
+    def __init__(self, ip):       
+        """
+        Initializes a ChordNode instance with the given IP address.
+
+        Parameters:
+        ip (str): The IP address of the node.
+
+        Attributes:
+        id (int): The hashed identifier of the node.
+        ip (str): The IP address of the node.
+        conn (GRPCConnection): The gRPC connection for the node.
+        fingers (list[GRPCConnection]): The finger table initialized with the node's connection.   
+        succ (GRPCConnection): The successor node in the Chord ring.
+        pred (GRPCConnection): The predecessor node in the Chord ring.
+        """
+
         self.id = hash_key(ip,M)
         self.ip = ip            
 
@@ -77,9 +94,22 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         self._start_check_predecessor()
         self._start_logger()
 
-    def join(self): 
+    def join(self):  
+        """
+        Joins the node to an existing Chord network or creates a new one.
 
-        # Autodescubrimiento multicast
+        This method attempts to discover existing nodes in the network using 
+        multicast. If an existing node is found, it checks the node's 
+        availability. If the node is responsive, it sets the current node's 
+        successor to the discovered node's successor. If the discovered node 
+        is the only node in the network, the current node will take it as both 
+        its predecessor and successor, and notify the discovered node that it 
+        is not alone.
+
+        If no existing nodes are found, a new network is created with the 
+        current node as the only member, setting itself as its own successor.
+        """
+
         ip = self._discover_existing_nodes()
 
         if ip:
@@ -125,6 +155,17 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
     #============GRPC SERVER METHODS============
 
     def FindSucc(self, request: IdMessage, context) -> IpMessage:       
+        """
+        GRPC method to find the successor of a given id in the Chord ring.
+        
+        Parameters:
+        request (IdMessage): The id to find the successor of.
+        context: The GRPC context.
+        
+        Returns:
+        IpMessage: The ip of the successor of the given id.
+        """
+        
         id = request.id
         
         if self.id == id:
@@ -142,6 +183,17 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         
         
     def FindPred(self, request: IdMessage, context) -> IpMessage:
+        """
+        GRPC method to find the predecessor of a given id in the Chord ring.
+
+        Parameters:
+        request (IdMessage): The id to find the predecessor of.
+        context: The GRPC context.
+
+        Returns:
+        IpMessage: The ip of the predecessor of the given id.
+        """
+
         id = request.id
         node = self.conn
         succ = node.get_succ()       
@@ -152,16 +204,44 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         return IpMessage(ip=node.ip)
 
     def GetSucc(self, request: EmptyMessage, context) -> IpMessage:
+        """
+        GRPC method to get the successor of the current node.
+
+        Returns:
+        IpMessage: The ip of the successor of the current node.
+        """
         with self.succ_lock:            
             return IpMessage(ip=self.succ.ip)
 
     def GetPred(self, request: EmptyMessage, context) -> IpMessage:
+        """
+        GRPC method to get the predecessor of the current node.
+
+        Returns:
+        IpMessage: The ip of the predecessor of the current node, or an empty IpMessage 
+        if there is no predecessor.
+        """
+
         with self.pred_lock:
             if self.pred:
                 return IpMessage(ip=self.pred.ip)
             return IpMessage()
 
     def UpdatePred(self, request: IpMessage, context) -> EmptyMessage:
+        """
+        GRPC method to update the predecessor of this node in the Chord ring.
+        
+        Parameters:
+        request (IpMessage): The ip of the new predecessor.
+        context: The GRPC context.
+        
+        Returns:
+        EmptyMessage: An empty message.
+        
+        Raises:
+        grpc.StatusCode.INTERNAL: If an error occurred while updating the predecessor.
+        """
+        
         ip = request.ip
         id = hash_key(ip,M)
 
@@ -189,6 +269,19 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         return EmptyMessage()
 
     def UpdateSucc(self, request: IpMessage, context) -> EmptyMessage:
+        """
+        GRPC method to update the successor of this node in the Chord ring.
+
+        Parameters:
+        request (IpMessage): The ip of the new successor.
+        context: The GRPC context.
+
+        Returns:
+        EmptyMessage: An empty message.
+
+        Raises:
+        grpc.StatusCode.INTERNAL: If an error occurred while updating the successor.
+        """
         node = GRPCConnection(request.ip)
         with self.succ_lock:
             self.succ = node
@@ -196,6 +289,20 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         return EmptyMessage()
 
     def NotAlone(self, request: IpMessage, context) -> EmptyMessage:
+        """
+        GRPC method to notify the node that it is not the only node in the network.
+
+        This method is used when a second node joins the Chord network, 
+        updating the current node's successor and predecessor to the new node.
+
+        Parameters:
+        request (IpMessage): The IP of the new node.
+        context: The GRPC context.
+
+        Returns:
+        EmptyMessage: An empty message.
+        """
+
         node = GRPCConnection(request.ip)
         self.succ = node
         self.pred = node
@@ -203,6 +310,12 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         return EmptyMessage()    
         
     def Ping(self, request: EmptyMessage, context) -> StatusMessage:
+        """
+        GRPC method to ping the node.
+
+        Returns:
+        StatusMessage: A StatusMessage indicating whether the node is alive.
+        """
         return StatusMessage(ok=True)
     
     #============END GRPC SERVER METHODS============
@@ -213,6 +326,15 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
     
 
     def _stabilize(self):
+        """
+        Stabilization method.
+
+        This method is called periodically to ensure the finger table is up to date.
+        It checks if the current successor is alive and if it is the correct one.
+        If the successor is not the correct one, it updates the finger table.
+        It also updates the predecessor of the successor.
+        """
+        
         with self.succ_lock:
             succ = self.succ
         
@@ -239,6 +361,12 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
    
 
     def _fix_fingers(self):
+        """
+        Periodically updates the finger table by finding the successor of the id calculated by id + 2^i mod 2^M.
+
+        This method is called in a separate thread to run in the background.
+        """
+        
         batch_size = 10
         while True:
             for _ in range(batch_size):
@@ -256,6 +384,15 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
     
 
     def _check_predecessor(self):
+        """
+        Checks if the predecessor is alive and if not, updates it.
+
+        This method is called periodically to ensure the predecessor is up to date.
+        If the predecessor is not alive, it updates the predecessor to the predecessor of the predecessor.
+        If the predecessor of the predecessor is not alive either, it sets the predecessor to the current node.
+        It also updates the successor of the predecessor to the current node if it is not the same node.
+        """
+        
         try:
             if self.pred and not self.pred.ping():
                 logger.info(f"Predecesor {self.pred.id} no responde, eliminando")
@@ -310,6 +447,7 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
 
     def _start_logger(self):
         def log_status():
+
             while self._running:
                 with self.succ_lock:
                     succ = self.succ.id if self.succ else 'None'
@@ -320,5 +458,5 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         self._logger_thread = threading.Thread(target=log_status, daemon=True)
         self._logger_thread.start()
 
-    #============END INFINITE LOOPS============
+#============END INFINITE LOOPS============
 
