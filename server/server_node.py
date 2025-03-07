@@ -9,8 +9,7 @@ import aiohttp
 import asyncio
 from aiohttp import FormData
 from multiprocessing import Process
-from urllib.parse import quote
-from fastapi import FastAPI, UploadFile, File, Form, status
+from fastapi import FastAPI, UploadFile, File, Form, status, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from chord.chord_node import ChordNode
@@ -82,25 +81,42 @@ class ServerNode(ChordNode):
         @self.app.post("/scrape")
         async def scrape_request(url: str):
 
-            # Determine responsible node using Chord
-            key = hash_key(url, M)
-            responsible_node_ip = self.conn.find_succ(key)
-            responsible_node_id = hash_key(responsible_node_ip, M)
+            try:
 
-            if responsible_node_id != self.id:
-                logger.info(f"Redirecting scrape request of {url} to responsible node: {responsible_node_ip}")
-                responsible_url = f"http://{responsible_node_ip}:{API_PORT}/scrape?url={quote(url)}"
-                return RedirectResponse(responsible_url)
-              
-            if url not in self.storage_set:
-                async with self.lock:
-                    if url not in self.storage_set:
-                        logger.info("Scraping " + url)
-                        scrape(url, self.storage_dir)                    
-                        update_storage(self.storage_dir,url) 
-                        self.storage_set.add(url)                
+                # Determine responsible node using Chord
+                key = hash_key(url, M)
+                responsible_node_ip = self.conn.find_succ(key)
+                responsible_node_id = hash_key(responsible_node_ip, M)
 
-            return self._serve_file(url)
+                if responsible_node_id != self.id:
+                    logger.info(f"Redirecting scrape request of {url} to responsible node: {responsible_node_ip}")
+                    responsible_url = f"http://{responsible_node_ip}:{API_PORT}/scrape?url={url}"
+                    return RedirectResponse(responsible_url)
+                
+                if url not in self.storage_set:
+                    async with self.lock:
+                        if url not in self.storage_set:
+                            logger.info(f"Iniciando scraping de {url}")
+                            try:
+                                scrape(url, self.storage_dir)                            
+                            except Exception as e:
+                                raise HTTPException(
+                                    status_code=500,
+                                    detail=f"Error durante el scraping: {str(e)}"
+                                )    
+                            update_storage(self.storage_dir,url) 
+                            self.storage_set.add(url)               
+
+                return self._serve_file(url)
+            
+            except HTTPException:
+                raise  # Re-lanza las excepciones HTTP ya manejadas
+            except Exception as e:
+                logger.error(f"Error inesperado: {str(e)}")
+                return JSONResponse(
+                    status_code=500,
+                    content={"message": f"Error interno del servidor: {str(e)}"}
+                )
 
         @self.app.post("/replicate")
         async def replicate_data(
@@ -213,13 +229,6 @@ class ServerNode(ChordNode):
             
 
             
-
-            # def _replicate_data(self, url):
-    #     """Replica los datos a los nodos sucesores"""
-    #     replicas = self.get_successors(REPLICATION_FACTOR)
-    #     for node in replicas:
-    #         if node.id != self.id:
-    #             self._grpc_send_data(node, url, data)
 
     
 

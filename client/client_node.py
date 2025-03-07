@@ -6,7 +6,8 @@ import socket
 import shutil
 import struct
 import argparse
-import time
+import atexit
+from urllib.parse import quote
 
 import streamlit as st
 
@@ -28,6 +29,9 @@ class ClientNode:
         self.storage_dir = self.create_storage_dir()
         self.already_scraped_urls = set()    
         self.setup_ui()
+
+        atexit.register(self.shutdown)
+
     
     def create_storage_dir(self):        
         storage_dir = os.path.join('REQUESTS', self.ip)
@@ -60,6 +64,8 @@ class ClientNode:
 
     def send_url(self, url):
 
+        url = quote(url, safe='/:')
+
         # ips = self.discover_servers()
         # ip = ips[0] if ips else None
         # if not ip:
@@ -70,40 +76,64 @@ class ClientNode:
             st.error("Please enter a valid URL.")
             return
         
-        if not url.endswith('/'):
-            url += '/'
+        # if not url.endswith('/'):
+        #     url += '/'
 
         folder = self.folder_name(url)
         
         if url not in self.already_scraped_urls:
 
-            logger.info(f"Sending to server: {url}")
+            logger.info(f"Sending to server {self.server}: {url}")
             request_url = f"http://{self.server}:8000/scrape?url={url}"
 
             try:
-                response = requests.post(request_url)
-                if response.status_code == 200:
+                response = requests.post(request_url, timeout=15)
+                response.raise_for_status()
                                     
-                    zip_path = folder + ".zip"                    
+                zip_path = folder + ".zip"                    
 
-                    with open(zip_path, 'wb') as file:
-                        file.write(response.content)
-                    
-                    with zipfile.ZipFile(zip_path, 'r') as file_zip:
-                        file_zip.extractall(folder)
-                    os.remove(zip_path)
+                with open(zip_path, 'wb') as file:
+                    file.write(response.content)
+                
+                with zipfile.ZipFile(zip_path, 'r') as file_zip:
+                    file_zip.extractall(folder)
+                os.remove(zip_path)
 
-                    self.update_local_storage(url)
-                    self.already_scraped_urls.add(url)                    
+                self.update_local_storage(url)
+                self.already_scraped_urls.add(url)                 
 
-                else:
-                    st.error(f"Error downloading: {response.status_code}")
-
+            except requests.exceptions.HTTPError as e:
+                st.error(
+                    "**¡Ups! Algo salió mal al procesar tu solicitud.**\n\n"
+                    "Parece que hubo un problema al intentar acceder a la página web que ingresaste. Esto puede deberse a:\n\n"
+                    "1. La dirección web no existe o está mal escrita.\n"                     
+                    "2. Problemas de conexión a internet.\n"                    
+                    "3. La página web no está disponible en este momento.\n\n"
+                    "**¿Qué puedes hacer?**\n"
+                    "- Verifica que la URL esté escrita correctamente.\n"
+                    "- Intenta nuevamente más tarde.\n"
+                    "- Si el problema persiste, contáctanos para que podamos ayudarte."
+                )
+                return
+            
+            except requests.exceptions.ConnectionError:
+                st.error("No se pudo conectar al servidor. Verifique su conexión")
+                return
+            
+            except requests.exceptions.Timeout:
+                st.error("Tiempo de espera agotado. Intente nuevamente")
+                return
+            
+            except requests.exceptions.RequestException as e:
+                st.error(f"Error de comunicación: {str(e)}")
+                return
+            
             except Exception as e:
-                st.error(f"An error occurred: {e}")
+                st.error(f"Error inesperado: {str(e)}")
+                return
 
         else:
-            print(f"The url {url} is already scraped.")
+            logger.info(f"The url {url} is already scraped.")
 
         
         with open(f"{folder}/index.html", 'r', encoding='utf-8') as html_file:
@@ -154,7 +184,7 @@ class ClientNode:
   
     def shutdown(self):
         shutil.rmtree(self.storage_dir, ignore_errors=True)
-        print(f"Storage directory {self.storage_dir} removed.")
+        
 
 
     def read_local_storage(self) -> list[str]:

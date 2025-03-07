@@ -35,8 +35,7 @@ def update_storage(storage_dir, url: str) -> None:
     with open(index_file, 'a') as archivo:        
         archivo.write(url + '\n')   
 
-def get_folder_name(url):
-    url = url[:-1]
+def get_folder_name(url):    
     return url.split("//")[-1].replace("/", "_")
 
 
@@ -46,24 +45,29 @@ def get_folder_name(url):
 
 def scrape(url: str, path: str, only_html = True) -> None:
 
-    response = requests.get(url)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Error al acceder a la URL: {str(e)}") from e   
+
+    folder = create_folder(url,path)
     
-    if response.status_code == 200:
+    soup = BeautifulSoup(response.text, "html.parser")
+    
+    with open(os.path.join(folder, 'index.html'), 'w', encoding='utf-8') as f:
+        f.write(soup.prettify(formatter="html")) 
 
-        folder = create_folder(url,path)
-        
-        soup = BeautifulSoup(response.text, "html.parser")
-        
-        with open(os.path.join(folder, 'index.html'), 'w', encoding='utf-8') as f:
-            f.write(soup.prettify(formatter="html")) 
+    if not only_html:
+        download_files(url, soup, folder)
 
-        if not only_html:
-            download_files(url, soup, folder)
+    compress(folder)
 
-        compress(folder)
-
-    else:
-        raise Exception(f"Error accessing {url}: {response.status_code}")    
+     
 
 
 def create_folder(url: str, path: str) -> str:
