@@ -13,7 +13,7 @@ from fastapi import FastAPI, UploadFile, File, Form, status, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from chord.chord_node import ChordNode
-from utils import hash_key, is_between, scrape, update_storage, get_folder_name
+from utils.utils import hash_key, is_between, scrape, update_storage, get_folder_name
 
 import logging
 logging.basicConfig(
@@ -22,11 +22,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+from utils.const import HOST, API_PORT, REPLICATION_INTERVAL
+from roles import scraper, replicator, authenticator
 
-API_HOST = "0.0.0.0"
-API_PORT = 8000
-M = 32
-REPLICATION_INTERVAL = 10
+
 
 class ServerNode(ChordNode):
     def __init__(self):
@@ -42,6 +41,7 @@ class ServerNode(ChordNode):
         self.storage_set = set()        
 
         self.app = FastAPI()   
+        self.app.state.node = self
         self.app.add_event_handler("startup", self.start_replication_loop)
         self.configure_endpoints() 
         self.api_process = None      
@@ -56,7 +56,7 @@ class ServerNode(ChordNode):
         self._start_api_process()      
           
     def _start_api_process(self):                   
-        self.api_process = Process(target = uvicorn.run(self.app,host=API_HOST,port=API_PORT,log_level="error"))
+        self.api_process = Process(target = uvicorn.run(self.app,host=HOST,port=API_PORT,log_level="error"))
         self.api_process.start() 
 
     
@@ -73,50 +73,54 @@ class ServerNode(ChordNode):
 
     
 
-    def configure_endpoints(self):        
+    def configure_endpoints(self): 
+        self.app.include_router(scraper.router)
+        # self.app.include_router(replicator.router)
+        # self.app.include_router(authenticator.router)
+
         @self.app.get("/urls")
         async def get_urls():
             return JSONResponse(content=list(self.storage_set))
 
-        @self.app.post("/scrape")
-        async def scrape_request(url: str):
+        # @self.app.post("/scrape")
+        # async def scrape_request(url: str):
 
-            try:
+        #     try:
 
-                # Determine responsible node using Chord
-                key = hash_key(url, M)
-                responsible_node_ip = self.conn.find_succ(key)
-                responsible_node_id = hash_key(responsible_node_ip, M)
+        #         # Determine responsible node using Chord
+        #         key = hash_key(url)
+        #         responsible_node_ip = self.conn.find_succ(key)
+        #         responsible_node_id = hash_key(responsible_node_ip)
 
-                if responsible_node_id != self.id:
-                    logger.info(f"Redirecting scrape request of {url} to responsible node: {responsible_node_ip}")
-                    responsible_url = f"http://{responsible_node_ip}:{API_PORT}/scrape?url={url}"
-                    return RedirectResponse(responsible_url)
+        #         if responsible_node_id != self.id:
+        #             logger.info(f"Redirecting scrape request of {url} to responsible node: {responsible_node_ip}")
+        #             responsible_url = f"http://{responsible_node_ip}:{API_PORT}/scrape?url={url}"
+        #             return RedirectResponse(responsible_url)
                 
-                if url not in self.storage_set:
-                    async with self.lock:
-                        if url not in self.storage_set:
-                            logger.info(f"Iniciando scraping de {url}")
-                            try:
-                                scrape(url, self.storage_dir)                            
-                            except Exception as e:
-                                raise HTTPException(
-                                    status_code=500,
-                                    detail=f"Error durante el scraping: {str(e)}"
-                                )    
-                            update_storage(self.storage_dir,url) 
-                            self.storage_set.add(url)               
+        #         if url not in self.storage_set:
+        #             async with self.lock:
+        #                 if url not in self.storage_set:
+        #                     logger.info(f"Iniciando scraping de {url}")
+        #                     try:
+        #                         scrape(url, self.storage_dir)                            
+        #                     except Exception as e:
+        #                         raise HTTPException(
+        #                             status_code=500,
+        #                             detail=f"Error durante el scraping: {str(e)}"
+        #                         )    
+        #                     update_storage(self.storage_dir,url) 
+        #                     self.storage_set.add(url)               
 
-                return self._serve_file(url)
+        #         return self._serve_file(url)
             
-            except HTTPException:
-                raise  # Re-lanza las excepciones HTTP ya manejadas
-            except Exception as e:
-                logger.error(f"Error inesperado: {str(e)}")
-                return JSONResponse(
-                    status_code=500,
-                    content={"message": f"Error interno del servidor: {str(e)}"}
-                )
+        #     except HTTPException:
+        #         raise  # Re-lanza las excepciones HTTP ya manejadas
+        #     except Exception as e:
+        #         logger.error(f"Error inesperado: {str(e)}")
+        #         return JSONResponse(
+        #             status_code=500,
+        #             content={"message": f"Error interno del servidor: {str(e)}"}
+        #         )
 
         @self.app.post("/replicate")
         async def replicate_data(
@@ -184,7 +188,7 @@ class ServerNode(ChordNode):
         # Obtener URLs de responsabilidad del nodo
         my_urls = set()
         for url in self.storage_set:
-            key = hash_key(url, M)
+            key = hash_key(url)
             if is_between(key, self.pred.id if self.pred else 0, self.id):
                 my_urls.add(url)
 
@@ -217,20 +221,6 @@ class ServerNode(ChordNode):
                 except Exception as e:
                     logger.error(f"Error general con vecino {neighbor}: {str(e)}")
 
-        
-    def _serve_file(self, url):
-        zip_file = f"{get_folder_name(url)}.zip"
-        path = os.path.join(self.storage_dir, zip_file)
-        return FileResponse(
-            path=path,
-            filename=zip_file,
-            media_type='application/zip'
-        )
-            
-
-            
-
-    
 
     def _graceful_shutdown(self, signum, frame):        
         logger.info("Iniciando apagado controlado...")        

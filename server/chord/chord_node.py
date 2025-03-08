@@ -1,12 +1,12 @@
 from concurrent import futures
+from contextlib import contextmanager
 import threading
 import time
 import grpc
 
 from chord.multicast_node import MulticastNode
-from utils import hash_key, is_between
 
-from chord.grpc_connection import GRPCConnection
+
 from chord.protos.chord_pb2 import IpMessage, IdMessage, StatusMessage, EmptyMessage
 import chord.protos.chord_pb2_grpc as pb
 
@@ -17,9 +17,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# python -m grpc_tools.protoc -I./protos --python_out=. --grpc_python_out=. ./protos/chord.proto
    
-RPC_PORT = 50051
-M = 32
+from utils.const import RPC_PORT, M, FIX_FINGERS_INTERVAL, STABILIZE_INTERVAL, CHECK_PRED_INTERVAL, STATUS_INTERVAL
+from utils.utils import hash_key, is_between
+
+class NodeRef:
+    def __init__(self, ip: str, port: int = RPC_PORT):
+        self.id = hash_key(ip)
+        self.ip = ip
+        self.port = port
+
 
 class ChordNode(pb.ChordServiceServicer, MulticastNode):
     """
@@ -27,33 +35,19 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
     """
 
     def __init__(self, ip):       
-        """
-        Initializes a ChordNode instance with the given IP address.
-
-        Parameters:
-        ip (str): The IP address of the node.
-
-        Attributes:
-        id (int): The hashed identifier of the node.
-        ip (str): The IP address of the node.
-        conn (GRPCConnection): The gRPC connection for the node.
-        fingers (list[GRPCConnection]): The finger table initialized with the node's connection.   
-        succ (GRPCConnection): The successor node in the Chord ring.
-        pred (GRPCConnection): The predecessor node in the Chord ring.
-        """
-
-        self.id = hash_key(ip,M)
-        self.ip = ip            
-
-        self.conn = GRPCConnection(self.ip)
         
-        self.fingers: list[GRPCConnection] = [self.conn] * M
+
+        self.id = hash_key(ip)
+        self.ip = ip 
+        self.ref = NodeRef(ip)
+
+        self.fingers: list[NodeRef] = [self.ref] * M
         self.next = 0  # Finger table index to fix next
         
         # Variables protegidas por locks
-        self.succ: GRPCConnection = None
-        self.pred: GRPCConnection = None        
-        self.pred2: GRPCConnection = None
+        self.succ: NodeRef = None
+        self.pred: NodeRef = None        
+        self.pred2: NodeRef = None
 
         self.succ_lock = threading.Lock()
         self.pred_lock = threading.Lock()
@@ -95,44 +89,31 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         self._start_logger()
 
     def join(self):  
-        """
-        Joins the node to an existing Chord network or creates a new one.
-
-        This method attempts to discover existing nodes in the network using 
-        multicast. If an existing node is found, it checks the node's 
-        availability. If the node is responsive, it sets the current node's 
-        successor to the discovered node's successor. If the discovered node 
-        is the only node in the network, the current node will take it as both 
-        its predecessor and successor, and notify the discovered node that it 
-        is not alone.
-
-        If no existing nodes are found, a new network is created with the 
-        current node as the only member, setting itself as its own successor.
-        """
+        
 
         ip = self._discover_existing_nodes()
 
-        if ip:
+        if ip: 
 
-            node = GRPCConnection(ip)
+            node = NodeRef(ip)           
 
-            if not node.ping():
+            if not self.ping(node):
                 logger.error(f"Error en join, el nodo {node.id} no responde")
                 return         
             
-            with self.succ_lock:
-                self.succ = GRPCConnection(node.find_succ(self.id))
+            with self.succ_lock:                
+                self.succ = self.find_succ(node,self.id)
             logger.info(f"Unido a la red. Sucesor: {self.succ.id}")            
             
             # Second node joins to chord ring
-            if self.succ.get_succ().id == self.succ.id:
+            if self.get_succ(self.succ).id == self.succ.id:
                 with self.pred_lock:
                     self.pred = self.succ
-                self.pred2 = self.conn
-                self.succ.not_alone(self.ip)         
+                self.pred2 = self.ref
+                self.not_alone(self.succ,self.ip)         
         else:
             logging.info(f"Nueva red creada.")
-            self.succ = self.conn  
+            self.succ = self.ref
         
 
     def stop_server(self):
@@ -155,16 +136,7 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
     #============GRPC SERVER METHODS============
 
     def FindSucc(self, request: IdMessage, context) -> IpMessage:       
-        """
-        GRPC method to find the successor of a given id in the Chord ring.
         
-        Parameters:
-        request (IdMessage): The id to find the successor of.
-        context: The GRPC context.
-        
-        Returns:
-        IpMessage: The ip of the successor of the given id.
-        """
         
         id = request.id
         
@@ -177,50 +149,41 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         # Otherwise, find the closest preceding node in the finger table and ask it.
         for i in range(len(self.fingers) - 1, -1, -1):
             if self.fingers[i] and is_between(self.fingers[i].id, self.id, id):
-                if self.fingers[i].ping():
-                    return IpMessage(ip=self.fingers[i].find_succ(id)) 
-        return IpMessage(ip=self.succ.ip)       
+                if self.ping(self.fingers[i]):
+                    succ = self.find_succ(self.fingers[i],id)
+                    return IpMessage(ip=succ.ip) 
+        return IpMessage(ip=self.succ.ip)
+
+        # id = request.id
+        # node = self.ref
+        # succ = self.get_succ(node)     
+
+        # while not is_between(id, node.id, succ.id):
+        #     node = succ
+        #     succ = self.get_succ(node) 
+        # return IpMessage(ip=succ.ip) 
+    
         
         
     def FindPred(self, request: IdMessage, context) -> IpMessage:
-        """
-        GRPC method to find the predecessor of a given id in the Chord ring.
-
-        Parameters:
-        request (IdMessage): The id to find the predecessor of.
-        context: The GRPC context.
-
-        Returns:
-        IpMessage: The ip of the predecessor of the given id.
-        """
+        
 
         id = request.id
-        node = self.conn
-        succ = node.get_succ()       
+        node = self.ref
+        succ = self.get_succ(node)     
 
         while not is_between(id, node.id, succ.id):
             node = succ
-            succ = node.get_succ()
+            succ = self.get_succ(node) 
         return IpMessage(ip=node.ip)
 
     def GetSucc(self, request: EmptyMessage, context) -> IpMessage:
-        """
-        GRPC method to get the successor of the current node.
-
-        Returns:
-        IpMessage: The ip of the successor of the current node.
-        """
+        
         with self.succ_lock:            
             return IpMessage(ip=self.succ.ip)
 
     def GetPred(self, request: EmptyMessage, context) -> IpMessage:
-        """
-        GRPC method to get the predecessor of the current node.
-
-        Returns:
-        IpMessage: The ip of the predecessor of the current node, or an empty IpMessage 
-        if there is no predecessor.
-        """
+        
 
         with self.pred_lock:
             if self.pred:
@@ -228,39 +191,26 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
             return IpMessage()
 
     def UpdatePred(self, request: IpMessage, context) -> EmptyMessage:
-        """
-        GRPC method to update the predecessor of this node in the Chord ring.
         
-        Parameters:
-        request (IpMessage): The ip of the new predecessor.
-        context: The GRPC context.
         
-        Returns:
-        EmptyMessage: An empty message.
-        
-        Raises:
-        grpc.StatusCode.INTERNAL: If an error occurred while updating the predecessor.
-        """
-        
-        ip = request.ip
-        id = hash_key(ip,M)
+        ip = request.ip        
 
-        if self.id == id:
+        if self.ip == ip:
             return EmptyMessage()
         
         try:
-            node = GRPCConnection(ip)
+            node = NodeRef(ip)
             with self.pred_lock:
                 current_pred = self.pred
                 if not current_pred:
                     self.pred = node
-                    self.pred2 = node.get_pred()
-                    logger.info(f"Predecesor actualizado a {id}")
-                elif node.ping():
+                    self.pred2 = self.get_pred(node)
+                    logger.info(f"Predecesor actualizado a {node.id}")
+                elif self.ping(node):
                     if is_between(node.id, current_pred.id, self.id):
                         self.pred2 = self.pred
                         self.pred = node
-                        logger.info(f"Predecesor actualizado a {id}")                 
+                        logger.info(f"Predecesor actualizado a {node.id}")                 
         except Exception as e:
             logger.error(f"Error en update_pred: {str(e)}")
             context.set_code(grpc.StatusCode.INTERNAL)
@@ -269,44 +219,19 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         return EmptyMessage()
 
     def UpdateSucc(self, request: IpMessage, context) -> EmptyMessage:
-        """
-        GRPC method to update the successor of this node in the Chord ring.
-
-        Parameters:
-        request (IpMessage): The ip of the new successor.
-        context: The GRPC context.
-
-        Returns:
-        EmptyMessage: An empty message.
-
-        Raises:
-        grpc.StatusCode.INTERNAL: If an error occurred while updating the successor.
-        """
-        node = GRPCConnection(request.ip)
+        
+        node = NodeRef(request.ip)
         with self.succ_lock:
             self.succ = node
             logger.info(f"Sucesor actualizado a {node.id}") 
         return EmptyMessage()
 
     def NotAlone(self, request: IpMessage, context) -> EmptyMessage:
-        """
-        GRPC method to notify the node that it is not the only node in the network.
-
-        This method is used when a second node joins the Chord network, 
-        updating the current node's successor and predecessor to the new node.
-
-        Parameters:
-        request (IpMessage): The IP of the new node.
-        context: The GRPC context.
-
-        Returns:
-        EmptyMessage: An empty message.
-        """
-
-        node = GRPCConnection(request.ip)
+        
+        node = NodeRef(request.ip)
         self.succ = node
         self.pred = node
-        self.pred2 = self.conn
+        self.pred2 = self.ref
         return EmptyMessage()    
         
     def Ping(self, request: EmptyMessage, context) -> StatusMessage:
@@ -319,6 +244,57 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         return StatusMessage(ok=True)
     
     #============END GRPC SERVER METHODS============
+
+
+    #============GRPC CLIENT METHODS============
+
+    @contextmanager
+    def _get_channel(self, server: NodeRef):        
+        channel = grpc.insecure_channel(f'{server.ip}:{server.port}')
+        try:
+            yield channel
+        finally:
+            channel.close()
+
+    def _remote_call(self, server: NodeRef, method, request):
+        with self._get_channel(server) as channel:
+            stub = pb.ChordServiceStub(channel)            
+            return getattr(stub, method)(request)            
+
+    def find_succ(self, server: NodeRef, id: int) -> NodeRef:        
+        response = self._remote_call(server,'FindSucc',IdMessage(id=id))
+        return NodeRef(response.ip)        
+
+    def find_pred(self, server: NodeRef, id: int) -> NodeRef:
+        response = self._remote_call(server,'FindPred',IdMessage(id=id))
+        return NodeRef(response.ip)        
+
+    def get_succ(self, server: NodeRef) -> NodeRef:           
+        response = self._remote_call(server,'GetSucc',EmptyMessage())
+        return NodeRef(response.ip)             
+
+    def get_pred(self, server: NodeRef) -> NodeRef:        
+        response = self._remote_call(server,'GetPred',EmptyMessage())
+        return NodeRef(response.ip)                        
+    
+    def update_pred(self, server: NodeRef, ip: str) -> None:    
+        response = self._remote_call(server,'UpdatePred', IpMessage(ip=ip)) 
+    
+    def update_succ(self, server: NodeRef, ip: str) -> None:        
+        response = self._remote_call(server,'UpdateSucc', IpMessage(ip=ip))
+
+    def not_alone(self, server: NodeRef, ip: str) -> None:       
+        response = self._remote_call(server,'NotAlone', IpMessage(ip=ip))  
+
+    def ping(self, server: NodeRef) -> bool:
+        try:
+            response = self._remote_call(server,'Ping',EmptyMessage())
+            return response.ok    
+        except grpc.RpcError as e:
+            return False
+
+
+    #============END GRPC CLIENT METHODS============
 
     
     #============STABILIZATION============            
@@ -338,23 +314,23 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         with self.succ_lock:
             succ = self.succ
         
-        if not succ.ping() or succ.id == self.id:
+        if not self.ping(succ) or succ.id == self.id:
             return
 
         try:
-            pred_node = succ.get_pred()            
+            pred_node = self.get_pred(succ)            
             if pred_node and is_between(pred_node.id, self.id, succ.id) and (pred_node.id != succ.id):                
                 with self.succ_lock:
                     self.succ = pred_node
                     logger.info(f"Sucesor actualizado a {pred_node.id} durante estabilización")
             
-            self.succ.update_pred(self.ip)
+            self.update_pred(succ,self.ip)
 
             with self.pred_lock:
                 current_pred = self.pred
 
-            if current_pred and current_pred.ping():
-                self.pred2 = current_pred.get_pred()
+            if current_pred and self.ping(current_pred):
+                self.pred2 = self.get_pred(current_pred)
             
         except Exception as e:
             logger.warning(f"Error estabilizando: {str(e)}")
@@ -373,14 +349,11 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
                 try:
                     self.next += 1
                     if self.next >= M:
-                        self.next = 0
-                    ip = self.conn.find_succ((self.id + 2 ** self.next) % (2 ** M))
-                    self.fingers[self.next] = GRPCConnection(ip)
+                        self.next = 0                    
+                    self.fingers[self.next] = self.find_succ(self.ref,(self.id + 2 ** self.next) % (2 ** M))
                 except Exception as e:                    
                     pass
-            time.sleep(5)
-
-
+            time.sleep(FIX_FINGERS_INTERVAL)
     
 
     def _check_predecessor(self):
@@ -394,28 +367,27 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         """
         
         try:
-            if self.pred and not self.pred.ping():
+            if self.pred and not self.ping(self.pred):
                 logger.info(f"Predecesor {self.pred.id} no responde, eliminando")
                 
-                if self.pred2.ping():
+                if self.ping(self.pred2):
                     self.pred = self.pred2        
-                else:
-                    ip = self.conn.find_pred(self.pred2.id)
-                    self.pred = GRPCConnection(ip)
+                else:                    
+                    self.pred = self.find_pred(self.ref,self.pred2.id)
                 
                 logger.info(f"Predecesor actualizado a {self.pred.id} luego de haber caído")
-                self.pred2 = self.pred.get_pred()
+                self.pred2 = self.get_pred(self.pred)
 
                 if self.id == self.pred.id:
-                    self.succ = self.conn
+                    self.succ = self.ref
                     self.pred = None
                     self.pred2 = None
                 
                 if self.pred:
-                    self.pred.update_succ(self.ip)                  
+                    self.update_succ(self.pred,self.ip)                  
         except Exception as e:
             self.pred = None
-            self.succ = self.conn
+            self.succ = self.ref
             logger.error(f"Error al comprobar predecesor: {str(e)}")  
 
     #============END STABILIZATION============  
@@ -430,7 +402,7 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
                     self._stabilize()
                 except Exception as e:
                     logger.error(f"Error en estabilización: {str(e)}")
-                time.sleep(5)
+                time.sleep(STABILIZE_INTERVAL)
         self._stabilize_thread = threading.Thread(target=stabilizer,daemon=True)
         self._stabilize_thread.start()
 
@@ -441,7 +413,7 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
                     self._check_predecessor()
                 except Exception as e:
                     logger.error(f"Error en chequeo de predecesor: {str(e)}")
-                time.sleep(2)
+                time.sleep(CHECK_PRED_INTERVAL)
         self._check_predecessor_thread = threading.Thread(target=predecessor_checker,daemon=True)
         self._check_predecessor_thread.start()
 
@@ -454,7 +426,7 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
                 with self.pred_lock:
                     pred = self.pred.id if self.pred else 'None'
                 logger.info(f"Estado actual - Sucesor: {succ}, Predecesor: {pred}")
-                time.sleep(20)
+                time.sleep(STATUS_INTERVAL)
         self._logger_thread = threading.Thread(target=log_status, daemon=True)
         self._logger_thread.start()
 

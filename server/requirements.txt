@@ -4,7 +4,9 @@ bs4
 requests
 aiohttp
 urljoin
-protobuf
+protobuf==5.29.3
 grpcio
 asyncio
 python-multipart
+python-jose
+passlib

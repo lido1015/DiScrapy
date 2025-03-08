@@ -9,10 +9,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-MULTICAST_GROUP = '224.0.0.1'
-MULTICAST_PORT = 5000
-DISCOVERY_TIMEOUT = 2  
+from utils.const import MULTICAST_GROUP, MULTICAST_PORT, DISCOVERY_TIMEOUT
 
 class MulticastNode():
     

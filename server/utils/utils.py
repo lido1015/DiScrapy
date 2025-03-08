@@ -7,10 +7,12 @@ from bs4 import BeautifulSoup
 import urljoin
 from urllib.parse import urljoin
 
+from utils.const import M
+
 
     #============CHORD============
 
-def hash_key(key: str, m: int) -> int:
+def hash_key(key: str, m: int = M) -> int:
     return int(hashlib.sha1(key.encode()).hexdigest()[:16], 16) % (2**m)
 
 def is_between(k: int, start: int, end: int) -> bool:
