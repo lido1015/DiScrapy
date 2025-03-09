@@ -10,3 +10,4 @@ asyncio
 python-multipart
 python-jose
 passlib
+bcrypt

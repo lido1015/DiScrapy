@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 MULTICAST_GROUP = '224.0.0.1'
 MULTICAST_PORT = 5000
 DISCOVERY_TIMEOUT = 5 
+SL_PORT = 8501
 
 class ClientNode:
     def __init__(self, server):
@@ -28,39 +29,145 @@ class ClientNode:
         self.ip = socket.gethostbyname(socket.gethostname())
         self.storage_dir = self.create_storage_dir()
         self.already_scraped_urls = set()    
+
+        if 'token' not in st.session_state:
+            st.session_state.token = None
+        if 'show_register' not in st.session_state:
+            st.session_state.show_register = False
+            st.session_state.register_error = None
+        if 'show_signin' not in st.session_state:
+            st.session_state.show_signin = False
+            st.session_state.signin_error = None
+
         self.setup_ui()
 
         atexit.register(self.shutdown)
 
-    
+
+    def setup_ui(self):
+        st.set_page_config(page_title="DiScrapy", layout="centered")
+
+        # Cargar CSS
+        css_file_path = "styles.css"
+        if os.path.exists(css_file_path):
+            with open(css_file_path, "r") as f:
+                st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+        else:
+            st.error(f"CSS file not found at: {css_file_path}")
+
+        with st.container():
+            st.title("Welcome to DiScrapy!")
+            
+            # Botones principales
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("Register", key="register_button"):
+                    st.session_state.show_register = True
+                    st.session_state.show_signin = False
+            with col2:
+                if st.button("Log In", key="signin_button"):
+                    st.session_state.show_signin = True
+                    st.session_state.show_register = False
+            with col3:
+                if st.button("Log Out", key="signout_button"):
+                    st.session_state.token = None 
+                    st.error("The user logged out.")
+
+            # Formulario de Registro
+            if st.session_state.show_register:
+                with st.form("register_form"):
+                    username = st.text_input("Username", key="reg_username")
+                    password = st.text_input("Password", type="password", key="reg_password")
+                    confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm_password")
+                    submitted = st.form_submit_button("Submit Registration")
+                    
+                    if submitted:
+                        success = self.register(username, password, confirm_password)
+                        if success:
+                            st.session_state.show_register = False
+                            st.session_state.register_error = None
+                        else:
+                            st.session_state.show_register = True  # Mantiene visible
+                    
+                    # Mostrar errores
+                    if st.session_state.register_error:
+                        st.error(st.session_state.register_error)
+
+            # Formulario de Inicio de Sesión
+            if st.session_state.show_signin:
+                with st.form("signin_form"):
+                    username = st.text_input("Username", key="signin_username")
+                    password = st.text_input("Password", type="password", key="signin_password")
+                    submitted = st.form_submit_button("Submit Log In")
+                    
+                    if submitted:
+                        success = self.login(username, password)
+                        if success:
+                            st.session_state.show_signin = False
+                            st.session_state.signin_error = None
+                        else:
+                            st.session_state.show_signin = True
+                    
+                    # Mostrar errores
+                    if st.session_state.signin_error:
+                        st.error(st.session_state.signin_error)
+
+            # Input de URL
+            url = st.text_input("Introduce the URL", "https://www.google.com/")
+            if st.button("Scrape"):
+                with st.spinner("Scraping..."):
+                    self.send_url(url)
+
+
+    def register(self, username, password, confirm_password):
+        
+        if not username.strip():
+            st.session_state.register_error = "Username is required"
+            return False
+        if len(password) < 6:
+            st.session_state.register_error = "Password must be at least 6 characters"
+            return False
+        if password != confirm_password:
+            st.session_state.register_error = "Passwords do not match"
+            return False        
+        
+        request_url = f"http://{self.server}:8000/authenticate"
+        try:            
+            response = requests.post(request_url, json=[username,password])
+            response.raise_for_status()
+            st.session_state.token = response.json()["access_token"]   
+            st.success(f"✅ User {username} registered successfully!")
+            return True
+        except:
+            st.session_state.register_error = f"User {username} already exist."
+            return False
+            
+
+
+    def login(self, username, password):
+        # Lógica de validación real
+        if not username.strip() or not password.strip():
+            st.session_state.signin_error = "Username and password are required"
+            return False
+        
+        request_url = f"http://{self.server}:8000/login"        
+        try:            
+            response = requests.post(request_url, json=[username,password])
+            response.raise_for_status()
+            st.session_state.token = response.json()["access_token"]   
+            st.success(f"✅ User {username} logged in successfully!")
+            return True
+        except requests.HTTPError:            
+            st.session_state.signin_error = response.json()["detail"]
+            return False
+
+
     def create_storage_dir(self):        
         storage_dir = os.path.join('REQUESTS', self.ip)
         os.makedirs(storage_dir, exist_ok=True)
         return storage_dir
 
-    def setup_ui(self):
-        # Set the page configuration
-        st.set_page_config(page_title="DiScrapy", layout="centered")
-
-        css_file_path = "styles.css"
-        if os.path.exists(css_file_path):
-            with open(css_file_path, "r") as f:
-                css_content = f.read()
-                st.markdown(f'<style>{css_content}</style>', unsafe_allow_html=True)
-        else:
-            st.error(f"CSS file not found at: {css_file_path}")
         
-
-        # Title of the app
-        st.title("Welcome to DiScrapy!")
-
-        # Input for URL
-        url = st.text_input("Introduce the URL","https://www.google.com/")
-
-        if st.button("Scrape"):
-            with st.spinner("Scraping..."):
-                self.send_url(url)
-
 
     def send_url(self, url):
 
@@ -75,19 +182,28 @@ class ClientNode:
         if not url:
             st.error("Please enter a valid URL.")
             return
-        
-        # if not url.endswith('/'):
-        #     url += '/'
 
         folder = self.folder_name(url)
+
+        logger.info(f"Mi token actual: {st.session_state.token}")
         
         if url not in self.already_scraped_urls:
 
             logger.info(f"Sending to server {self.server}: {url}")
-            request_url = f"http://{self.server}:8000/scrape?url={url}"
 
-            try:
-                response = requests.post(request_url, timeout=15)
+            request_url = f"http://{self.server}:8000/scrape?url={url}"
+           
+      
+            headers = {
+                "Authorization": f"Bearer {st.session_state.token}"              
+            }
+
+            try:                
+                response = requests.post(
+                    request_url,                        
+                    headers=headers,
+                    timeout=15
+                )
                 response.raise_for_status()
                                     
                 zip_path = folder + ".zip"                    
@@ -103,17 +219,20 @@ class ClientNode:
                 self.already_scraped_urls.add(url)                 
 
             except requests.exceptions.HTTPError as e:
-                st.error(
-                    "**¡Ups! Algo salió mal al procesar tu solicitud.**\n\n"
-                    "Parece que hubo un problema al intentar acceder a la página web que ingresaste. Esto puede deberse a:\n\n"
-                    "1. La dirección web no existe o está mal escrita.\n"                     
-                    "2. Problemas de conexión a internet.\n"                    
-                    "3. La página web no está disponible en este momento.\n\n"
-                    "**¿Qué puedes hacer?**\n"
-                    "- Verifica que la URL esté escrita correctamente.\n"
-                    "- Intenta nuevamente más tarde.\n"
-                    "- Si el problema persiste, contáctanos para que podamos ayudarte."
-                )
+                if e.response.status_code == 401:
+                    st.error("Invalid credentials. Please log in.")
+                else:
+                    st.error(
+                        "**Oops! Something went wrong while processing your request.**\n\n"
+                        "It seems there was an issue trying to access the website you entered. This could be due to:\n\n"
+                        "1. The web address does not exist or is misspelled.\n"
+                        "2. Internet connectivity issues.\n"
+                        "3. The website is temporarily unavailable.\n\n"
+                        "**What can you do?**\n"
+                        "- Check that the URL is correctly spelled.\n"
+                        "- Try again later.\n"
+                        "- If the problem persists, contact us for assistance."
+                    )
                 return
             
             except requests.exceptions.ConnectionError:

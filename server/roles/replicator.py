@@ -1,9 +1,10 @@
 import os
-from fastapi import APIRouter, UploadFile, File, Form, Request, status, HTTPException
+from fastapi import APIRouter, UploadFile, File, Query, Body, Form, Request, status, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 import aiohttp
 import asyncio
 from aiohttp import FormData
+from server_node import ServerNode 
 
 
 from utils.utils import is_between, hash_key, update_storage, get_folder_name
@@ -16,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-router = APIRouter()\
+router = APIRouter()
 
 
 @router.post("/replicate")
@@ -25,7 +26,7 @@ async def replicate_data(
     url: str = Form(...),  
     content: UploadFile = File(...)    
 ):
-    node = request.app.state.node
+    node: ServerNode = request.app.state.node
 
     try:
         filename = f"{get_folder_name(url)}.zip"
@@ -48,6 +49,27 @@ async def replicate_data(
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"message": f"Error en replicación: {str(e)}"}
+        )
+    
+@router.post("/replicate_users")
+async def replicate_users(request: Request, users = Body(...)):
+    
+    node = request.app.state.node
+    users = dict(users)
+
+    try:      
+        node.users_dict |= users
+        logger.info(f"Usuarios obtenidos por replicacion: {list(users)}")                 
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"message": "Replicación de usuarios exitosa"}
+        )
+    except Exception as e:
+        logger.error(f"Error en replicación de usuarios: {str(e)}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"message": f"Error en replicación de usuarios: {str(e)}"}
         )
 
 
@@ -76,7 +98,7 @@ async def send_replication_request(node_ip: str, url_to_replicate: str, content:
         logger.error(f"Error de conexión con {node_ip}: {str(e)}")
 
 
-async def replicate_data_to_neighbors(node):
+async def replicate_data_to_neighbors(node: ServerNode):
     neighbors = []        
     
     if node.succ and node.succ.ip != node.ip:
@@ -85,12 +107,21 @@ async def replicate_data_to_neighbors(node):
     if node.pred and node.pred.ip != node.ip and node.pred.ip != node.succ.ip:
         neighbors.append(node.pred.ip)
 
+    if len(neighbors) == 0:
+        return
+
     # Obtener URLs de responsabilidad del nodo
     my_urls = set()
     for url in node.storage_set:
         key = hash_key(url)
-        if is_between(key, node.pred.id if node.pred else 0, node.id):
+        if is_between(key, node.pred.id if node.pred else 0, node.id) or is_between(key, node.pred2.id if node.pred2 else 0, node.pred.id if node.pred else 0):
             my_urls.add(url)
+
+    my_users = set()
+    for user, password in node.users_dict.items():
+        key = hash_key(user)
+        if is_between(key, node.pred.id if node.pred else 0, node.id) or is_between(key, node.pred2.id if node.pred2 else 0, node.pred.id):
+            my_users.add((user,password))    
 
     # Usar sesión única para mejor performance
     async with aiohttp.ClientSession() as session:
@@ -115,6 +146,36 @@ async def replicate_data_to_neighbors(node):
                                 logger.error(f"Archivo no encontrado para replicación: {url}")
                             except Exception as e:
                                 logger.error(f"Error leyendo archivo {url}: {str(e)}")
+
+                async with session.get(f"http://{neighbor}:{API_PORT}/users") as response:
+                    if response.status == 200:
+                        users_data = await response.json()
+                        
+                        neighbor_users = {tuple(user) for user in users_data}  # Convertir a tuplas
+                        users_to_replicate = my_users - neighbor_users
+
+                        if len(users_to_replicate) > 0:
+
+                            url = f"http://{neighbor}:{API_PORT}/replicate_users"
+            
+                            # Convertir tuplas de vuelta a listas para el envío (si es necesario)
+                            
+                            data = [list(user) for user in users_to_replicate]
+                            
+                            async with session.post(url, json=data) as response:
+                                if response.status != 200:
+                                    response_text = await response.text()
+                                    logger.error(f"Error replicando usuarios a {node.ip}: {response_text}")
+
+                            # url = f"http://{neighbor}:{API_PORT}/replicate_users"
+                            # data = FormData()
+                            # data.add_field("users", list(users_to_replicate))
+
+                            # async with session.post(url, data=data) as response:
+                            #     if response.status != 200:
+                            #         response_text = await response.text()
+                            #         logger.error(f"Error replicando usuarios a {node.ip}: {response_text}")
+                        
 
             except aiohttp.ClientConnectorError:
                 logger.error(f"No se pudo conectar al vecino {neighbor}")

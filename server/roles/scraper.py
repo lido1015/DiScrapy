@@ -5,9 +5,11 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, RedirectResponse, FileResponse
-from server_node import ServerNode  
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
+
 
 from utils.utils import hash_key, update_storage, get_folder_name
 from utils.const import API_PORT
@@ -21,10 +23,24 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.post("/scrape")
-async def scrape_request(url: str, request: Request):
+oauth2 = OAuth2PasswordBearer(tokenUrl="scrape")
+ALGORITHM = "HS256"
+SECRET = "1652e68e6e5c4c9d21c6c38a87c143ea3f0b865fe318fae0374de808f5f0016f"
 
-    node: ServerNode = request.app.state.node
+@router.post("/scrape")
+async def scrape_request(url: str, request: Request, token: str = Depends(oauth2)): 
+
+    try:
+        payload = verify_jwt(token, SECRET) 
+    except:
+        raise HTTPException(
+                status_code = 401,
+                detail="Invalid credentials. Please log in.",
+                headers = {"WWW-Authenticate":"Bearer"}
+            )
+        
+
+    node = request.app.state.node
 
     try:
 
@@ -152,3 +168,20 @@ def compress(folder):
                 zipf.write(file_path, os.path.relpath(file_path, folder))
 
     shutil.rmtree(folder)  
+
+
+
+
+def verify_jwt(token: str, secret_key: str, algorithm: str = "HS256") -> dict:    
+    try:
+        # Decodificar y verificar automáticamente
+        payload = jwt.decode(
+            token,
+            secret_key,
+            algorithms=[algorithm],  # ¡Importante! Evita ataques de algoritmo
+            options={"verify_exp": True, "require": ["exp"]},  # Verificar expiración
+        )
+        return payload
+    
+    except Exception as e:        
+        raise Exception(f"Token inválido: {str(e)}")
