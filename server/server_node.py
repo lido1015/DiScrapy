@@ -13,7 +13,7 @@ from fastapi import FastAPI, UploadFile, File, Form, status, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from chord.chord_node import ChordNode
-from utils.utils import hash_key, is_between, scrape, update_storage, get_folder_name
+from utils.utils import hash_key, is_between, update_storage, get_folder_name
 
 import logging
 logging.basicConfig(
@@ -67,7 +67,7 @@ class ServerNode(ChordNode):
         while True:
             await asyncio.sleep(REPLICATION_INTERVAL)
             try:
-                await self.replicate_data_to_neighbors()
+                await replicator.replicate_data_to_neighbors(self)
             except Exception as e:
                 logger.error(f"Error en tarea de replicación: {str(e)}")   
 
@@ -75,151 +75,113 @@ class ServerNode(ChordNode):
 
     def configure_endpoints(self): 
         self.app.include_router(scraper.router)
-        # self.app.include_router(replicator.router)
+        self.app.include_router(replicator.router)
         # self.app.include_router(authenticator.router)
 
         @self.app.get("/urls")
         async def get_urls():
             return JSONResponse(content=list(self.storage_set))
 
-        # @self.app.post("/scrape")
-        # async def scrape_request(url: str):
-
-        #     try:
-
-        #         # Determine responsible node using Chord
-        #         key = hash_key(url)
-        #         responsible_node_ip = self.conn.find_succ(key)
-        #         responsible_node_id = hash_key(responsible_node_ip)
-
-        #         if responsible_node_id != self.id:
-        #             logger.info(f"Redirecting scrape request of {url} to responsible node: {responsible_node_ip}")
-        #             responsible_url = f"http://{responsible_node_ip}:{API_PORT}/scrape?url={url}"
-        #             return RedirectResponse(responsible_url)
-                
-        #         if url not in self.storage_set:
-        #             async with self.lock:
-        #                 if url not in self.storage_set:
-        #                     logger.info(f"Iniciando scraping de {url}")
-        #                     try:
-        #                         scrape(url, self.storage_dir)                            
-        #                     except Exception as e:
-        #                         raise HTTPException(
-        #                             status_code=500,
-        #                             detail=f"Error durante el scraping: {str(e)}"
-        #                         )    
-        #                     update_storage(self.storage_dir,url) 
-        #                     self.storage_set.add(url)               
-
-        #         return self._serve_file(url)
-            
-        #     except HTTPException:
-        #         raise  # Re-lanza las excepciones HTTP ya manejadas
-        #     except Exception as e:
-        #         logger.error(f"Error inesperado: {str(e)}")
-        #         return JSONResponse(
-        #             status_code=500,
-        #             content={"message": f"Error interno del servidor: {str(e)}"}
-        #         )
-
-        @self.app.post("/replicate")
-        async def replicate_data(
-            url: str = Form(...),  # <-- Form field
-            content: UploadFile = File(...)
-        ):
-            try:
-                filename = f"{get_folder_name(url)}.zip"
-                file_path = os.path.join(self.storage_dir, filename)
-                
-                content_bytes = await content.read()
-                with open(file_path, "wb") as f:
-                    f.write(content_bytes)
-                
-                update_storage(self.storage_dir, url) 
-                self.storage_set.add(url) 
-                logger.info(f"Url {url} obtenida mediante replicacion")               
-                
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={"message": "Replicación exitosa"}
-                )
-            except Exception as e:
-                logger.error(f"Error en replicación: {str(e)}")
-                return JSONResponse(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    content={"message": f"Error en replicación: {str(e)}"}
-                )
-
-
-    async def send_replication_request(self, node_ip: str, url_to_replicate: str, content: bytes):
-        endpoint_url = f"http://{node_ip}:{API_PORT}/replicate"
         
-        try:
-            async with aiohttp.ClientSession() as session:
-                data = FormData()
-                data.add_field("url", url_to_replicate)  # Form field
-                data.add_field(
-                    "content",  # Nombre del campo que coincide con el endpoint
-                    content,
-                    filename=f"{get_folder_name(url_to_replicate)}.zip",
-                    content_type="application/octet-stream"
-                )
+
+    #     @self.app.post("/replicate")
+    #     async def replicate_data(
+    #         url: str = Form(...),  # <-- Form field
+    #         content: UploadFile = File(...)
+    #     ):
+    #         try:
+    #             filename = f"{get_folder_name(url)}.zip"
+    #             file_path = os.path.join(self.storage_dir, filename)
+                
+    #             content_bytes = await content.read()
+    #             with open(file_path, "wb") as f:
+    #                 f.write(content_bytes)
+                
+    #             update_storage(self.storage_dir, url) 
+    #             self.storage_set.add(url) 
+    #             logger.info(f"Url {url} obtenida mediante replicacion")               
+                
+    #             return JSONResponse(
+    #                 status_code=status.HTTP_200_OK,
+    #                 content={"message": "Replicación exitosa"}
+    #             )
+    #         except Exception as e:
+    #             logger.error(f"Error en replicación: {str(e)}")
+    #             return JSONResponse(
+    #                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #                 content={"message": f"Error en replicación: {str(e)}"}
+    #             )
+
+
+    # async def send_replication_request(self, node_ip: str, url_to_replicate: str, content: bytes):
+    #     endpoint_url = f"http://{node_ip}:{API_PORT}/replicate"
+        
+    #     try:
+    #         async with aiohttp.ClientSession() as session:
+    #             data = FormData()
+    #             data.add_field("url", url_to_replicate)  # Form field
+    #             data.add_field(
+    #                 "content",  # Nombre del campo que coincide con el endpoint
+    #                 content,
+    #                 filename=f"{get_folder_name(url_to_replicate)}.zip",
+    #                 content_type="application/octet-stream"
+    #             )
             
-                async with session.post(endpoint_url, data=data) as response:
-                    if response.status != 200:
-                        response_text = await response.text()
-                        logger.error(f"Error replicando a {node_ip}: {response_text}")
-                    else:
-                        logger.info(f"Replicación exitosa a {node_ip}")
+    #             async with session.post(endpoint_url, data=data) as response:
+    #                 if response.status != 200:
+    #                     response_text = await response.text()
+    #                     logger.error(f"Error replicando a {node_ip}: {response_text}")
+    #                 else:
+    #                     logger.info(f"Replicación exitosa a {node_ip}")
     
-        except Exception as e:
-            logger.error(f"Error de conexión con {node_ip}: {str(e)}")
+    #     except Exception as e:
+    #         logger.error(f"Error de conexión con {node_ip}: {str(e)}")
 
    
-    async def replicate_data_to_neighbors(self):
-        neighbors = []        
+    # async def replicate_data_to_neighbors(self):
+    #     neighbors = []        
         
-        if self.succ and self.succ.ip != self.ip:
-            neighbors.append(self.succ.ip)
+    #     if self.succ and self.succ.ip != self.ip:
+    #         neighbors.append(self.succ.ip)
         
-        if self.pred and self.pred.ip != self.ip and self.pred.ip != self.succ.ip:
-            neighbors.append(self.pred.ip)
+    #     if self.pred and self.pred.ip != self.ip and self.pred.ip != self.succ.ip:
+    #         neighbors.append(self.pred.ip)
 
-        # Obtener URLs de responsabilidad del nodo
-        my_urls = set()
-        for url in self.storage_set:
-            key = hash_key(url)
-            if is_between(key, self.pred.id if self.pred else 0, self.id):
-                my_urls.add(url)
+    #     # Obtener URLs de responsabilidad del nodo
+    #     my_urls = set()
+    #     for url in self.storage_set:
+    #         key = hash_key(url)
+    #         if is_between(key, self.pred.id if self.pred else 0, self.id):
+    #             my_urls.add(url)
 
-        # Usar sesión única para mejor performance
-        async with aiohttp.ClientSession() as session:
-            for neighbor in neighbors:
-                try:
-                    # Obtener URLs del vecino
-                    async with session.get(f"http://{neighbor}:{API_PORT}/urls") as response:
-                        if response.status == 200:
-                            neighbor_urls = set(await response.json())
-                            urls_to_replicate = my_urls - neighbor_urls
+    #     # Usar sesión única para mejor performance
+    #     async with aiohttp.ClientSession() as session:
+    #         for neighbor in neighbors:
+    #             try:
+    #                 # Obtener URLs del vecino
+    #                 async with session.get(f"http://{neighbor}:{API_PORT}/urls") as response:
+    #                     if response.status == 200:
+    #                         neighbor_urls = set(await response.json())
+    #                         urls_to_replicate = my_urls - neighbor_urls
 
-                            # Replicar cada URL
-                            for url in urls_to_replicate:
-                                filename = f"{get_folder_name(url)}.zip"
-                                file_path = os.path.join(self.storage_dir, filename)
+    #                         # Replicar cada URL
+    #                         for url in urls_to_replicate:
+    #                             filename = f"{get_folder_name(url)}.zip"
+    #                             file_path = os.path.join(self.storage_dir, filename)
                                 
-                                try:
-                                    with open(file_path, "rb") as f:
-                                        content = f.read()
-                                        await self.send_replication_request(neighbor, url, content)
-                                except FileNotFoundError:
-                                    logger.error(f"Archivo no encontrado para replicación: {url}")
-                                except Exception as e:
-                                    logger.error(f"Error leyendo archivo {url}: {str(e)}")
+    #                             try:
+    #                                 with open(file_path, "rb") as f:
+    #                                     content = f.read()
+    #                                     await self.send_replication_request(neighbor, url, content)
+    #                             except FileNotFoundError:
+    #                                 logger.error(f"Archivo no encontrado para replicación: {url}")
+    #                             except Exception as e:
+    #                                 logger.error(f"Error leyendo archivo {url}: {str(e)}")
 
-                except aiohttp.ClientConnectorError:
-                    logger.error(f"No se pudo conectar al vecino {neighbor}")
-                except Exception as e:
-                    logger.error(f"Error general con vecino {neighbor}: {str(e)}")
+    #             except aiohttp.ClientConnectorError:
+    #                 logger.error(f"No se pudo conectar al vecino {neighbor}")
+    #             except Exception as e:
+    #                 logger.error(f"Error general con vecino {neighbor}: {str(e)}")
 
 
     def _graceful_shutdown(self, signum, frame):        
