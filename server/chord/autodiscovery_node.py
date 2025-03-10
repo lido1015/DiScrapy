@@ -35,11 +35,11 @@ class AutoDiscoveryNode():
                     return ip                        
 
                 except socket.timeout:
-                    print("No se encontraron servidores.")
+                    logger.info("No se encontraron servidores.")
                     return None  # No se encontró ningún servidor
 
         except Exception as e:
-            print(f"Error durante el descubrimiento: {e}")
+            logger.info(f"Error durante el descubrimiento: {e}")
             return None
         finally:
             sock.close()
@@ -55,6 +55,7 @@ class AutoDiscoveryNode():
                 message = data.decode('utf-8')
 
                 if message == "DISCOVER_REQUEST":
+                    logger.info(f"Respondiendo a mensaje de descubrimiento desde {addr}")
                     response = f"{self.ip}".encode('utf-8')
                     sock.sendto(response, addr)
    

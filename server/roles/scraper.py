@@ -23,12 +23,30 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-oauth2 = OAuth2PasswordBearer(tokenUrl="scrape")
+#oauth2 = OAuth2PasswordBearer(tokenUrl="scrape")
+oauth2_header = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 ALGORITHM = "HS256"
 SECRET = "1652e68e6e5c4c9d21c6c38a87c143ea3f0b865fe318fae0374de808f5f0016f"
 
+
+async def get_token(request: Request, token_header: str = Depends(oauth2_header)):
+    # Primero intenta obtener el token del header
+    token = token_header
+    
+    # Si no está en el header, busca en los query parameters
+    if not token:
+        token = request.query_params.get("token")
+    
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials. Please log in.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return token
+
 @router.post("/scrape")
-async def scrape_request(url: str, request: Request, token: str = Depends(oauth2)): 
+async def scrape_request(url: str, request: Request, token: str = Depends(get_token)): 
 
     try:
         payload = verify_jwt(token, SECRET) 
@@ -50,7 +68,7 @@ async def scrape_request(url: str, request: Request, token: str = Depends(oauth2
 
         if owner_node.id != node.id:
             logger.info(f"Redirecting scrape request of {url} to responsible node: {owner_node.ip}")
-            url = f"http://{owner_node.ip}:{API_PORT}/scrape?url={url}"
+            url = f"http://{owner_node.ip}:{API_PORT}/scrape?url={url}&token={token}"
             return RedirectResponse(url)
         
         if url not in node.storage_set:

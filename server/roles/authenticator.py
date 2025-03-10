@@ -59,7 +59,7 @@ async def auth(request: Request, credentials: list = Body(...) ):
         hashed_password = bcrypt.hashpw(credentials[1].encode(), salt)
         
         node.users_dict[username] = hashed_password.decode('utf-8')
-        logger.info(f"Usuario {username} registrado {hashed_password}") 
+        logger.info(f"Usuario {username} registrado") 
         
         access_token = {
             "sub": username,

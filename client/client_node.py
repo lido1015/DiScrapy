@@ -126,7 +126,7 @@ class ClientNode:
 
     def register(self, username, password, confirm_password):
 
-        
+        st.session_state.server = self.discover_servers()
         
         if not username.strip():
             st.session_state.register_error = "Username is required"
@@ -137,6 +137,8 @@ class ClientNode:
         if password != confirm_password:
             st.session_state.register_error = "Passwords do not match"
             return False        
+        
+        st.session_state.server = self.discover_servers()
         
         request_url = f"http://{st.session_state.server}:8000/authenticate"
         try:            
@@ -156,6 +158,8 @@ class ClientNode:
         if not username.strip() or not password.strip():
             st.session_state.signin_error = "Username and password are required"
             return False
+        
+        st.session_state.server = self.discover_servers()
         
         request_url = f"http://{st.session_state.server}:8000/login"        
         try:            
@@ -194,7 +198,9 @@ class ClientNode:
         
         if url not in self.already_scraped_urls:
 
-            logger.info(f"Sending to server {self.server}: {url}")
+            st.session_state.server = self.discover_servers()
+
+            logger.info(f"Sending to server {st.session_state.server}: {url}")
 
             request_url = f"http://{st.session_state.server}:8000/scrape?url={url}"
            
