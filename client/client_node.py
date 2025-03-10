@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import zipfile
 import requests
 import socket
@@ -19,16 +20,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 MULTICAST_GROUP = '224.0.0.1'
-MULTICAST_PORT = 5000
-DISCOVERY_TIMEOUT = 5 
+MULTICAST_PORT = 10000
+DISCOVERY_TIMEOUT = 5
 SL_PORT = 8501
 
 class ClientNode:
-    def __init__(self, server):
-        self.server = server        
+    def __init__(self):
+                
         self.ip = socket.gethostbyname(socket.gethostname())
         self.storage_dir = self.create_storage_dir()
         self.already_scraped_urls = set()    
+
+        if 'server' not in st.session_state:
+            st.session_state.server = self.discover_servers()
+
 
         if 'token' not in st.session_state:
             st.session_state.token = None
@@ -120,6 +125,8 @@ class ClientNode:
 
 
     def register(self, username, password, confirm_password):
+
+        
         
         if not username.strip():
             st.session_state.register_error = "Username is required"
@@ -131,7 +138,7 @@ class ClientNode:
             st.session_state.register_error = "Passwords do not match"
             return False        
         
-        request_url = f"http://{self.server}:8000/authenticate"
+        request_url = f"http://{st.session_state.server}:8000/authenticate"
         try:            
             response = requests.post(request_url, json=[username,password])
             response.raise_for_status()
@@ -150,7 +157,7 @@ class ClientNode:
             st.session_state.signin_error = "Username and password are required"
             return False
         
-        request_url = f"http://{self.server}:8000/login"        
+        request_url = f"http://{st.session_state.server}:8000/login"        
         try:            
             response = requests.post(request_url, json=[username,password])
             response.raise_for_status()
@@ -173,7 +180,7 @@ class ClientNode:
 
         url = quote(url, safe='/:')
 
-        # ips = self.discover_servers()
+        
         # ip = ips[0] if ips else None
         # if not ip:
         #     logger.info("No hay servidores disponibles")
@@ -183,15 +190,13 @@ class ClientNode:
             st.error("Please enter a valid URL.")
             return
 
-        folder = self.folder_name(url)
-
-        logger.info(f"Mi token actual: {st.session_state.token}")
+        folder = self.folder_name(url)        
         
         if url not in self.already_scraped_urls:
 
             logger.info(f"Sending to server {self.server}: {url}")
 
-            request_url = f"http://{self.server}:8000/scrape?url={url}"
+            request_url = f"http://{st.session_state.server}:8000/scrape?url={url}"
            
       
             headers = {
@@ -261,45 +266,74 @@ class ClientNode:
         #st.success("File downloaded and extracted successfully!")
         st.code(html_content, language='html')
 
-    def discover_servers(self):
-        """Envía multicast para descubrir nodos servidores existentes"""
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(DISCOVERY_TIMEOUT)
-        ttl = struct.pack('b', 1)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
+    # def discover_servers(self):
+    #     """Envía multicast para descubrir nodos servidores existentes"""
+    #     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     sock.settimeout(DISCOVERY_TIMEOUT)
+    #     ttl = struct.pack('b', 1)
+    #     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
         
+    #     try:
+    #         # Primero unirse al grupo multicast
+    #         sock.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP,
+    #                     socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton('0.0.0.0'))
+            
+    #         # Enviar solicitud de descubrimiento
+    #         sock.sendto(b'DISCOVER', (MULTICAST_GROUP, MULTICAST_PORT))
+            
+    #         # Recibir múltiples respuestas
+    #         ips = []
+    #         while True:
+    #             try:
+    #                 data, _ = sock.recvfrom(1024)
+    #                 ip = data.decode()
+    #                 logger.info(f"Nodo descubierto: {ip}")
+    #                 if ip not in ips:
+    #                     ips.append(ip)
+    #             except socket.timeout:
+    #                 break  # Finalizar al terminar el timeout
+            
+    #         return ips if ips else None
+            
+    #     except Exception as e:
+    #         logger.error(f"Error en descubrimiento: {str(e)}")
+    #         return None
+    #     finally:
+    #         # Dejar el grupo multicast antes de cerrar
+    #         sock.setsockopt(socket.SOL_IP, socket.IP_DROP_MEMBERSHIP,
+    #                     socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton('0.0.0.0'))
+    #         sock.close()
+
+    def discover_servers(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(DISCOVERY_TIMEOUT)  # Esperar 5 segundos por una respuesta
+
+
+        # Unirse al grupo multicast
+        group = socket.inet_aton(MULTICAST_GROUP)
+        mreq = struct.pack('4sL', group, socket.INADDR_ANY)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+        sock.bind(("",MULTICAST_PORT))
+        # Enviar solicitud de descubrimiento
+        discover_message = b"DISCOVER"
+        sock.sendto(discover_message, (MULTICAST_GROUP, MULTICAST_PORT))
+
+        # Esperar respuesta de un nodo
         try:
-            # Primero unirse al grupo multicast
-            sock.setsockopt(socket.SOL_IP, socket.IP_ADD_MEMBERSHIP,
-                        socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton('0.0.0.0'))
-            
-            # Enviar solicitud de descubrimiento
-            sock.sendto(b'DISCOVER', (MULTICAST_GROUP, MULTICAST_PORT))
-            
-            # Recibir múltiples respuestas
-            ips = []
+            logger.info("Esperando respuesta de un nodo...")
             while True:
-                try:
-                    data, _ = sock.recvfrom(1024)
-                    ip = data.decode()
-                    logger.info(f"Nodo descubierto: {ip}")
-                    if ip not in ips:
-                        ips.append(ip)
-                except socket.timeout:
-                    break  # Finalizar al terminar el timeout
-            
-            return ips if ips else None
-            
-        except Exception as e:
-            logger.error(f"Error en descubrimiento: {str(e)}")
+                data, addr = sock.recvfrom(1024)
+                if data == b"DISCOVER":
+                    continue
+                node_ip = data.decode()  # La IP del nodo activo
+                logger.info(f"Nodo descubierto: {node_ip}")
+                break
+            return node_ip
+        except socket.timeout:
+            print("No se recibió respuesta de ningún nodo.")
             return None
         finally:
-            # Dejar el grupo multicast antes de cerrar
-            sock.setsockopt(socket.SOL_IP, socket.IP_DROP_MEMBERSHIP,
-                        socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton('0.0.0.0'))
             sock.close()
-
-
   
     def shutdown(self):
         shutil.rmtree(self.storage_dir, ignore_errors=True)
@@ -321,16 +355,55 @@ class ClientNode:
         return f"{self.storage_dir}/" + url.split("//")[-1].replace("/", "_")
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--server", type=str, default="10.0.11.2")
 
-    try:
-        args = parser.parse_args()     
-        client = ClientNode(args.server)  
-    except SystemExit as e:
-        print(f"Error: {e}, argumentos recibidos: {sys.argv}")   
 
 
 if __name__ == "__main__":
-    main()
+    client = ClientNode() 
+
+
+# def discover_servers(timeout: int = 3) -> list:
+#     """
+#     Sends a multicast request to discover servers and waits for responses.
+
+#     :param timeout: Maximum time (in seconds) to wait for responses.
+#     :return: List of discovered server IPs.
+#     """
+#     MCAST_GRP = "224.0.0.1"
+#     MCAST_PORT = 10003
+#     MESSAGE = "DISCOVER_SERVER"
+#     BUFFER_SIZE = 1024
+
+#     # Crear socket UDP para enviar y recibir
+#     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+#     sock.settimeout(timeout)
+
+#     # Configurar TTL del paquete multicast
+#     ttl = struct.pack("b", 1)
+#     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
+
+#     # Enviar la petición multicast
+#     try:
+#         sock.sendto(MESSAGE.encode(), (MCAST_GRP, MCAST_PORT))
+#     except Exception as e:
+#         print(f"Error enviando el mensaje multicast: {e}")
+#         return []
+
+#     servers = []
+#     start_time = time.time()
+#     while True:
+#         try:
+#             data, addr = sock.recvfrom(BUFFER_SIZE)
+#             server_ip = data.decode().strip()
+#             servers.append(server_ip)
+#             print(f"Servidor descubierto: {server_ip} (respuesta desde {addr})")
+#         except socket.timeout:
+#             break
+#         except Exception as e:
+#             print(f"Error recibiendo datos: {e}")
+#             break
+#         if time.time() - start_time > timeout:
+#             break
+
+#     sock.close()
+#     return servers

@@ -4,9 +4,7 @@ import threading
 import time
 import grpc
 
-from chord.multicast_node import MulticastNode
-
-
+from chord.autodiscovery_node import AutoDiscoveryNode
 from chord.protos.chord_pb2 import IpMessage, IdMessage, StatusMessage, EmptyMessage
 import chord.protos.chord_pb2_grpc as pb
 
@@ -29,7 +27,7 @@ class NodeRef:
         self.port = port
 
 
-class ChordNode(pb.ChordServiceServicer, MulticastNode):
+class ChordNode(pb.ChordServiceServicer, AutoDiscoveryNode):
     """
     Represents a node in a Chord distributed hash table (DHT) network
     """
@@ -60,6 +58,7 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         self._stabilize_thread = None
         self._check_predecessor_thread = None
         self._logger_thread = None
+        self._broadcast_thread = None
         self._multicast_thread = None
         self._fix_fingers_thread = None
         self._running = False
@@ -73,13 +72,17 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
     def start_server(self):
 
         self.server.start()
-        logger.info(f"Nodo {self.ip} iniciado con ID {self.id}")
-                
-        self.join()
+        logger.info(f"Nodo {self.ip} iniciado con ID {self.id}") 
+
+        self.join()               
+        
 
         self._running = True
         self._server_thread = threading.Thread(target=self.server.wait_for_termination, daemon=True)
         self._server_thread.start()
+
+        self._broadcast_thread = threading.Thread(target=self._broadcast_listener, daemon=True)
+        self._broadcast_thread.start()
         self._multicast_thread = threading.Thread(target=self._multicast_listener, daemon=True)
         self._multicast_thread.start()
         self._fix_fingers_thread = threading.Thread(target=self._fix_fingers, daemon=True)
@@ -88,11 +91,13 @@ class ChordNode(pb.ChordServiceServicer, MulticastNode):
         self._start_check_predecessor()
         self._start_logger()
 
-    def join(self):  
+
+
+    def join(self): 
+
+        ip= self._discover_existing_nodes() if self._discover_existing_nodes() else None       
         
-
-        ip = self._discover_existing_nodes()
-
+        
         if ip: 
 
             node = NodeRef(ip)           
