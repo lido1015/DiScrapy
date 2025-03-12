@@ -30,7 +30,8 @@ class ServerNode(ChordNode):
       
         # Crear carpeta de almacenamiento del nodo
         self.storage_dir = os.path.join('database', str(self.ip))
-        os.makedirs(self.storage_dir,exist_ok=True)        
+        shutil.rmtree(self.storage_dir, ignore_errors=True)
+        os.makedirs(self.storage_dir)        
         with open(os.path.join(self.storage_dir, 'index.txt'), 'a'):
             pass        
 

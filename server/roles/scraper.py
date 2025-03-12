@@ -84,7 +84,9 @@ async def scrape_request(url: str, request: Request, token: str = Depends(get_to
                         )    
                     update_storage(node.storage_dir,url) 
                     node.storage_set.add(url)   
-                    logger.info(f"Scraping de {url} finalizado con exito")            
+                    logger.info(f"Scraping de {url} finalizado con exito")   
+        else:
+            logger.info("Devolviendo scraping cacheado de {url}")         
 
         return serve_file(node.storage_dir,url)
     
