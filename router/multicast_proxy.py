@@ -46,7 +46,7 @@ def proxy(port, read_buffer = 4196):
 
                 if ip_object.is_multicast:
                     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                        s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+                        s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
                         s.sendto(data, (ip, port))
                         print(f"Data sent to {(ip, port)}")
 

@@ -65,24 +65,29 @@ class AutoDiscoveryNode():
 
     def _multicast_listener(self):
         """Escucha solicitudes de descubrimiento y responde"""
-        # Crear socket multicast
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind(('', MULTICAST_PORT))
-
-        # Unirse al grupo multicast
-        group = socket.inet_aton(MULTICAST_GROUP)
-        mreq = struct.pack('4sL', group, socket.INADDR_ANY)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-
         while True:
             try:
-                data, addr = sock.recvfrom(1024)
-                if data == b'DISCOVER':
-                    # Responde con nuestra información
-                    response = f"{self.ip}".encode()
-                    sock.sendto(response, (MULTICAST_GROUP,MULTICAST_PORT))
-                    logger.info(f"Respondiendo a descubrimiento desde clientes")      
-                    
-            except Exception as e:                
-                time.sleep(1)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(('', MULTICAST_PORT))
+
+                group = socket.inet_aton(MULTICAST_GROUP)
+                mreq = struct.pack('4sL', group, socket.INADDR_ANY)
+                sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
+                while True:
+                    try:
+                        data, addr = sock.recvfrom(1024)
+                        if data == b'DISCOVER':
+                            response = f"{self.ip}".encode()
+                            sock.sendto(response, (MULTICAST_GROUP, MULTICAST_PORT))
+                            logger.info("Respondiendo a descubrimiento desde clientes")
+                    except socket.error as e:
+                        logger.error(f"Error de socket: {e}")
+                        raise  # Provoca la reconstrucción del socket
+            except Exception as e:
+                logger.error(f"Error en listener multicast: {e}")
+                if 'sock' in locals():
+                    sock.close()
+                time.sleep(1)  # Espera antes de reintento
       

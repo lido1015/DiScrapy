@@ -312,7 +312,9 @@ class ClientNode:
 
     def discover_servers(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.settimeout(DISCOVERY_TIMEOUT)  # Esperar 5 segundos por una respuesta
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
 
 
         # Unirse al grupo multicast
@@ -321,11 +323,12 @@ class ClientNode:
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         sock.bind(("",MULTICAST_PORT))
         # Enviar solicitud de descubrimiento
-        discover_message = b"DISCOVER"
-        sock.sendto(discover_message, (MULTICAST_GROUP, MULTICAST_PORT))
+        
 
         # Esperar respuesta de un nodo
         try:
+            discover_message = b"DISCOVER"
+            sock.sendto(discover_message, (MULTICAST_GROUP, MULTICAST_PORT))
             logger.info("Esperando respuesta de un nodo...")
             while True:
                 data, addr = sock.recvfrom(1024)
@@ -336,7 +339,7 @@ class ClientNode:
                 break
             return node_ip
         except socket.timeout:
-            print("No se recibió respuesta de ningún nodo.")
+            logger.info("No se recibió respuesta de ningún nodo.")
             return None
         finally:
             sock.close()
